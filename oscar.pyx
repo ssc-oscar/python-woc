@@ -58,6 +58,7 @@ def parse_sha1map_path(fname: str):
         raise ValueError(f'Invalid path: {fname}')
     return m.groups()
 
+# identities and their shortcut
 _short_name_to_full = {
     'a': 'author',
     'A': 'author_dealised',
@@ -80,9 +81,6 @@ _short_name_to_full = {
     'bin': 'binary_data',
     'idx': 'binary_index'
 }
-
-# match (name)Full(ver).(idx).tch
-
 _full_name_to_short = {v: k for k, v in _short_name_to_full.items()}
 
 ##### module configuration variables #####
@@ -140,10 +138,19 @@ def set_config(
 
     global PATHS, IGNORED_AUTHORS, URL_PREFIXES
 
-    if not os.path.exists(base_path):
-        raise FileNotFoundError(base_path)
+    # add support for environment variables
+    if os.environ.get('OSCAR_BASE_PATH'):
+        base_path = os.environ['OSCAR_BASE_PATH']
+    
+    for store_name in DEFAULT_STORES.keys():
+        if os.environ.get(store_name):
+            if stores is None:
+                stores = {}
+            stores[store_name] = os.environ[store_name]
 
     if stores is None:
+        if not os.path.exists(base_path):
+            raise FileNotFoundError(base_path)
         stores = {k: os.path.join(base_path, v) for k, v in DEFAULT_STORES.items()}
 
     # Scan the woc data directory
@@ -616,31 +623,13 @@ def _decode_content(
         return decomp(value).decode('utf-8')
     raise ValueError(f'Unsupported dtype: {out_dtype}')
 
-class BlobRawReader:
-    _cache = {}
-    @classmethod
-    def read_mmap(
-        cls, 
-        path: str,
-        offset: int,
-        length: int,
-        mode = 'rb'
-    ):
-        if path in BlobRawReader._cache:
-            _m = BlobRawReader._cache[path]
-        else:
-            _f = open(path, mode)
-            _m = mmap.mmap(_f.fileno(), 0, access=mmap.ACCESS_READ)
-            BlobRawReader._cache[path] = _m
-        
-        _m.seek(offset)
-        _m.read(length)
-
 # TODO: cache instances
+_file_obj_pool = {}
 def read_file_with_offset(file_path, offset, length):
-    with open (file_path, "rb") as _f:
-        _f.seek(offset)
-        return _f.read(length)
+    _f = _file_obj_pool.setdefault(file_path, open(file_path, "rb"))
+    with mmap.mmap(_f.fileno(), length=0, access=mmap.ACCESS_READ) as _m:
+        _m.seek(offset)
+        return _m.read(length)
 
 def _get_predix(
     key: bytes,
@@ -712,7 +701,7 @@ class _Base(object):
         return (binascii.hexlify(self.key).decode('ascii')
                 if isinstance(self.key, bytes) else self.key)
 
-    def resolve_path(self, dtype):
+    def resolve_path(self, dtype: Tuple[str, str]):
         """ Get path to a file using data type and object key (for sharding)
         """
         path, prefix_length = PATHS[dtype][0], PATHS[dtype][1]
@@ -799,7 +788,7 @@ class GitObject(_Base):
         if self.type not in ('commit', 'tree'):
             raise NotImplementedError
         # default implementation will only work for commits and trees
-        return decomp(self.read_tch((self.type, 'tch')))
+        return decomp(self.read_tch((_full_name_to_short[self.type], 'tch')))
 
     @classmethod
     def string_sha(cls, data):
@@ -862,7 +851,7 @@ class Blob(GitObject):
         """ Content of the blob """
         offset, length = self.position
         # no caching here to stay thread-safe
-        with open(self.resolve_path('blob.bin'), 'rb') as fh:
+        with open(self.resolve_path(('b','bin')), 'rb') as fh:
             fh.seek(offset)
             return decomp(fh.read(length))
 
@@ -1756,6 +1745,13 @@ class File(_Base):
                 continue
             if author not in IGNORED_AUTHORS:
                 yield c
+
+    @cached_property
+    def author_names(self):
+        data = decomp(self.read_tch(('f','a')))
+        return tuple(author_name
+                     for author_name in (data and data.split(b';')) or []
+                     if author_name and author_name != 'EMPTY')
 
     def __str__(self):
         return super(File, self).__str__().rstrip("\n\r")
