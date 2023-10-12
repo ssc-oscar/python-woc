@@ -2,192 +2,102 @@
 # cython: language_level=3str, wraparound=False, boundscheck=False, nonecheck=False
 
 import binascii
-from cpython.version cimport PY_MAJOR_VERSION
-from datetime import datetime, timedelta, tzinfo
+from datetime import datetime, timedelta, tzinfo, timezone
 import difflib
 from functools import wraps
-import glob
 import hashlib
-from libc.stdint cimport uint8_t, uint32_t, uint64_t
-from libc.stdlib cimport free
-from math import log
 import os
 import re
 from threading import Lock
 import time
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional, Union
 import warnings
+import mmap
+
+from libc.stdint cimport uint8_t, uint32_t, uint64_t
+from libc.stdlib cimport free
 
 # if throws "module 'lzf' has no attribute 'decompress'",
 # `pip uninstall lzf && pip install python-lzf`
 import lzf
+if not hasattr(lzf, 'decompress'):
+    raise ImportError('python-lzf is required to run Oscar; '
+                      'please install it with `pip uninstall lzf && pip install python-lzf`')
 
 __version__ = '2.2.1'
 __author__ = 'marat@cmu.edu'
 __license__ = 'GPL v3'
 
-if PY_MAJOR_VERSION < 3:
-    str_type = unicode
-    bytes_type = str
-else:
-    str_type = str
-    bytes_type = bytes
-
-
-try:
-    with open('/etc/hostname') as fh:
-        HOSTNAME = fh.read().strip()
-except IOError:
-    raise ImportError('Oscar only support Linux hosts so far')
-
-HOST = HOSTNAME.split('.', 1)[0]
-DOMAIN = HOSTNAME[len(HOST):]
-IS_TEST_ENV = 'OSCAR_TEST' in os.environ
-
-# test environment has 'OSCAR_TEST' environment variable set
-if not IS_TEST_ENV:
-    if not DOMAIN.endswith(r'.eecs.utk.edu'):
-        raise ImportError('Oscar is only available on certain servers at UTK, '
-                          'please modify to match your cluster configuration')
-
-    if HOST not in ('da4', 'da5'):
-        warnings.warn('Commit and tree direct content is only available on da4.'
-                      ' Some functions might not work as expected.\n\n')
-
-# Cython is generally smart enough to convert data[i] to int, but
-# pyximport in Py2 fails to do so, requires to use ord explicitly
-# TODO: get rid of this shame once Py2 support is dropped
-cdef uint8_t nth_byte(bytes data, uint32_t i):
-    if PY_MAJOR_VERSION < 3:
-        return ord(data[i])
-    return data[i]
-
-def _latest_version(path_template):
-    if '{ver}' not in path_template:
-        return ''
-    # Using * to allow for two-character versions
-    glob_pattern = path_template.format(key=0, ver='*')
-    filenames = glob.glob(glob_pattern)
-    prefix, postfix = glob_pattern.split('*', 1)
-    versions = [fname[len(prefix):-len(postfix)] for fname in filenames]
-    return max(versions or [''], key=lambda ver: (len(ver), ver))
-
-
-def _key_length(str path_template):
-    # type: (str) -> int
-    if '{key}' not in path_template:
-        return 0
-    glob_pattern = path_template.format(key='*', ver='*')
-    filenames = glob.glob(glob_pattern)
-    # key always comes the last, so rsplit is enough to account for two stars
-    prefix, postfix = glob_pattern.rsplit('*', 1)
-    # note that with wraparound=False we can't use negative indexes.
-    # this caused hard to catch bugs before
-    str_keys = [fname[len(prefix):len(fname)-len(postfix)] for fname in filenames]
-    keys = [int(key) for key in str_keys if key]
-    # Py2/3 compatible version
-    return int(log(max(keys or [0]) + 1, 2))
-
-
-# this dict is only for debugging purposes and it is not used anywhere
-VERSIONS = {}  # type: Dict[str, str]
-
-
-def _get_paths(dict raw_paths):
-    # type: (Dict[str, Tuple[str, Dict[str, str]]]) -> Dict[str, Tuple[bytes, int]]
+_basemap_pat = re.compile(r'^(\w+)2(\w+)Full(\w+)(?:.(\d+))?.tch$')
+def parse_basemap_path(fname: str):
     """
-    Compose path from
-    Args:
-        raw_paths (Dict[str, Tuple[str, Dict[str, str]]]): see example below
-
-    Returns:
-        (Dict[str, Tuple[str, int]]: map data type to a path template and a key
-            length, e.g.:
-            'author_commits' -> ('/da0_data/basemaps/a2cFullR.{key}.tch', 5)
+    Parse basemap filename into (src, dst, ver, idx)
+    >>> parse_basemap_path('c2fFullR.3.tch')
+    ('c', 'f', 'R', '3')
+    >>> parse_basemap_path('c2fFullR.tch')
+    ('c', 'f', 'R', None)
     """
-    paths = {}  # type: Dict[str, Tuple[bytes, int]]
-    local_data_prefix = '/' + HOST + '_data'
-    for category, (path_prefix, filenames) in raw_paths.items():
-        cat_path_prefix = os.environ.get(category, path_prefix)
-        cat_version = os.environ.get(category + '_VER') or _latest_version(
-            os.path.join(cat_path_prefix, list(filenames.values())[0]))
-        if cat_path_prefix.startswith(local_data_prefix):
-            cat_path_prefix = '/data' + cat_path_prefix[len(local_data_prefix):]
+    m = _basemap_pat.match(fname)
+    if not m or len(m.groups()) != 4:
+        raise ValueError(f'Invalid path: {fname}')
+    return m.groups()
 
-        for ptype, fname in filenames.items():
-            ppath = os.environ.get(
-                '_'.join(['OSCAR', ptype.upper()]), cat_path_prefix)
-            pver = os.environ.get(
-                '_'.join(['OSCAR', ptype.upper(), 'VER']), cat_version)
-            path_template = os.path.join(ppath, fname)
-            # TODO: .format with pver and check keys only
-            # this will allow to handle 2-char versions
-            key_length = _key_length(path_template)
-            if not key_length and not IS_TEST_ENV:
-                ppath = ppath .replace('da5','da4')
-                path_template = os.path.join(ppath, fname)
-                key_length = _key_length(path_template)
-                if not key_length:
-                  ppath = ppath .replace('da4','da3')
-                  path_template = os.path.join(ppath, fname)
-                  key_length = _key_length(path_template)
-                  if not key_length:
-                    warnings.warn("No keys found for path_template %s:\n%s" % (
-                      ptype, path_template))
-            VERSIONS[ptype] = pver
-            paths[ptype] = (
-                path_template.format(ver=pver, key='{key}'), key_length)
-    return paths
+_sha1map_pat = re.compile(r'^([\w\.]+)_(\d+).(\w+)$')
+def parse_sha1map_path(fname: str):
+    """
+    Parse sha1map (sha1o/sha1c/blob) filename into (name, idx, ext)
+    >>> parse_sha1map_path('commit_0.tch')
+    ('commit', '0', 'tch')
+    >>> parse_sha1map_path('blob_0.idx')
+    ('blob', '0', 'idx')
+    >>> parse_sha1map_path('sha1.blob_0.bin')
+    ('sha1.blob', '0', 'bin')
+    """
+    m = _sha1map_pat.match(fname)
+    if not m or len(m.groups()) != 3:
+        raise ValueError(f'Invalid path: {fname}')
+    return m.groups()
 
+_short_name_to_full = {
+    'a': 'author',
+    'A': 'author_dealised',
+    'b': 'blob',
+    'c': 'commit',
+    'cc': 'child_commit',
+    'f': 'file',
+    'fa': 'first_author',
+    't': 'tree',
+    'h': 'head',
+    'p': 'project',
+    'P': 'project_deforked',
+    'pc': 'parent_commit',
+    'r': 'root_commit',
+    'ta': 'time_author',
+    'tac': 'time_author_commit',
+    'trp': 'torvalds_path',
+    'dat': 'colon_seperated_data',
+    'tch': 'compressed_data',
+    'bin': 'binary_data',
+    'idx': 'binary_index'
+}
 
-# note to future self: Python2 uses str (bytes) for os.environ,
-# Python3 uses str (unicode). Don't add Py2/3 compatibility prefixes here
-PATHS = _get_paths({
-    'OSCAR_ALL_BLOBS': ('/da5_data/All.blobs/', {
-        'commit_sequential_idx': 'commit_{key}.idx',
-        'commit_sequential_bin': 'commit_{key}.bin',
-        'tree_sequential_idx': 'tree_{key}.idx',
-        'tree_sequential_bin': 'tree_{key}.bin',
-        'blob_sequential_idx': 'blob_{key}.idx',
-        'blob_sequential_bin': 'blob_{key}.bin',
-        'blob_data': 'blob_{key}.bin',
-    }),
-    'OSCAR_ALL_SHA1C': ('/da5_fast/All.sha1c', {
-        # critical - random access to trees and commits: only on da4 and da5
-        # - performance is best when /fast is on SSD raid
-        'commit_random': 'commit_{key}.tch',
-        'tree_random': 'tree_{key}.tch',
-    }),
-    # all three are available on da[3-5]
-    'OSCAR_ALL_SHA1O': ('/da4_fast/All.sha1o', {
-        'blob_offset': 'sha1.blob_{key}.tch',
-        # Speed is a bit lower since the content is read from HDD raid
-    }),
-    'OSCAR_BASEMAPS': ('/da5_fast', {
-        # relations - good to have but not critical
-        'commit_projects': 'c2pFull{ver}.{key}.tch',
-        'commit_children': 'c2ccFull{ver}.{key}.tch',
-        'commit_data': 'c2datFull{ver}.{key}.tch',
-        'commit_root': 'c2rFull{ver}.{key}.tch',
-        'commit_head': 'c2hFull{ver}.{key}.tch',
-        'commit_parent': 'c2pcFull{ver}.{key}.tch',
-        'author_commits': 'a2cFull{ver}.{key}.tch',
-        'author_projects': 'a2pFull{ver}.{key}.tch',
-        'author_files': 'a2fFull{ver}.{key}.tch',
-        'project_authors': 'p2aFull{ver}.{key}.tch',
+# match (name)Full(ver).(idx).tch
 
-        'commit_blobs': 'c2bFull{ver}.{key}.tch',
-        'commit_files': 'c2fFull{ver}.{key}.tch',
-        'project_commits': 'p2cFull{ver}.{key}.tch',
-        'blob_commits': 'b2cFull{ver}.{key}.tch',
-        # this points to the first time/author/commit
-        'blob_first_author': 'b2faFull{ver}.{key}.tch',
-        'file_authors': 'f2aFull{ver}.{key}.tch',
-        'file_commits': 'f2cFull{ver}.{key}.tch',
-        'file_blobs': 'f2bFull{ver}.{key}.tch',
-        'blob_files': 'b2fFull{ver}.{key}.tch',
-    }),
-})
+_full_name_to_short = {v: k for k, v in _short_name_to_full.items()}
+
+##### module configuration variables #####
+
+# default config values
+DEFAULT_BASE_PATH = '/woc'
+DEFAULT_STORES = {
+    'OSCAR_ALL_BLOBS': 'All.blobs',
+    'OSCAR_ALL_SHA1C': 'All.sha1c',
+    'OSCAR_ALL_SHA1O': 'All.sha1o',
+    'OSCAR_BASEMAPS': 'basemaps',
+}
+
+# tokyo cabinet store paths
+PATHS: Dict[Tuple[str, str], Tuple[str, int, Optional[str]]] = {}
 
 # prefixes used by World of Code to identify source project platforms
 # See Project.to_url() for more details
@@ -213,6 +123,100 @@ URL_PREFIXES = {
 IGNORED_AUTHORS = (
     b'GitHub Merge Button <merge-button@github.com>'
 )
+
+def set_config(
+        base_path: str = DEFAULT_BASE_PATH,
+        stores: Optional[Dict[str, str]] = None,
+        url_prefixes: Optional[Dict[bytes, bytes]] = None,
+        ignored_authors: Optional[Tuple[bytes]] = None
+    ):
+    """Set the configuration for the Oscar module.
+    :param base_path: path to the woc directory
+    :param stores: a dictionary of store names (OSCAR_ALL_BLOBS, OSCAR_ALL_SHA1C, OSCAR_ALL_SHA1O, OSCAR_BASEMAPS)
+        to their relative paths in the woc directory
+    :param url_prefixes: a BYTES dictionary of url prefixes to their full urls (e.g. b'bitbucket.org' -> b'bitbucket.org')
+    :param ignored_authors: a BYTES tuple of authors to ignore (e.g. b'GitHub Merge Button <merge-button@github.com>'
+    """
+
+    global PATHS, IGNORED_AUTHORS, URL_PREFIXES
+
+    if not os.path.exists(base_path):
+        raise FileNotFoundError(base_path)
+
+    if stores is None:
+        stores = {k: os.path.join(base_path, v) for k, v in DEFAULT_STORES.items()}
+
+    # Scan the woc data directory
+    for store_name, store_path in stores.items():
+        if not os.path.exists(store_path):
+            raise FileNotFoundError(f'{store_name}: {store_path}')
+
+        for f in os.listdir(store_path):
+            try:
+                if store_name == 'OSCAR_BASEMAPS':
+                    src, dst, ver, idx = parse_basemap_path(f)
+                    k = (src, dst)
+                    prefix_len = int(idx).bit_length() if idx else 0
+                    if k in PATHS:
+                        _, _predix_len, _ver = PATHS[k][0], PATHS[k][1], PATHS[k][2]
+                        assert _ver is not None, "Should not be here; check store type"
+                        if _ver > ver or (_ver == ver and _predix_len >= prefix_len):
+                            continue
+                    PATHS[k] = (
+                        os.path.join(store_path, 
+                            f.replace(idx, '{key}') if idx else f
+                        ), prefix_len, ver)
+                    pass
+                elif store_name in ('OSCAR_ALL_BLOBS', 'OSCAR_ALL_SHA1C', 'OSCAR_ALL_SHA1O'):
+                    name, idx, ext = parse_sha1map_path(f)
+                    try:
+                        src = _full_name_to_short[name.replace('sha1.','')]
+                    except KeyError:
+                        raise ValueError(f'Invalid file type: {name}')
+                    k = (src, ext)
+                    prefix_len = int(idx).bit_length() if idx else 0
+                    if k in PATHS:
+                        _, _predix_len = PATHS[k][0], PATHS[k][1]
+                        if _predix_len >= prefix_len:
+                            continue
+                    PATHS[k] = (
+                        os.path.join(store_path, 
+                            f.replace(idx, '{key}') if idx else f
+                        ), prefix_len, None)
+                else:
+                    raise ValueError(f'Invalid store name: {store_name}, expected one of {DEFAULT_STORES.keys()}')
+            
+            except ValueError as e:
+                warnings.warn(f'Cannot parse {f}: {repr(e)} ')
+
+    print(f'Loaded {len(PATHS.keys())} maps: ' + \
+        str([_short_name_to_full[x[0]] + "->" + _short_name_to_full[x[1]] + \
+            ":" + PATHS[x][0].format(key=2**PATHS[x][1]-1) for x in PATHS.keys()])
+    )
+
+    if url_prefixes is not None:
+        URL_PREFIXES = url_prefixes
+
+    if ignored_authors is not None:
+        IGNORED_AUTHORS = ignored_authors
+
+# run set_config on import
+try:
+    set_config()
+except FileNotFoundError as e:
+    warnings.warn("Oscar failed to locate /woc. Call oscar.set_config('/path/to/woc') first.")
+
+### polyfill for @cached_property ###
+
+def cached_property(func):
+    """ Classic memoize with @property on top"""
+    @wraps(func)
+    def wrapper(self):
+        key = '_' + func.__name__
+        if not hasattr(self, key):
+            setattr(self, key, func(self))
+        return getattr(self, key)
+    return property(wrapper)
 
 class ObjectNotFound(KeyError):
     pass
@@ -242,19 +246,18 @@ cdef unber(bytes buf):
     cdef:
         list res = []
         # blob_offset sizes are getting close to 32-bit integer max
-        uint64_t acc = 0
+        uint64_t acc = 0  
         uint8_t b
 
     for b in buf:
         acc = (acc << 7) + (b & 0x7f)
         if not b & 0x80:
             res.append(acc)
-            acc = 0
+            acc = 0  
     return res
 
 
 cdef (int, int) lzf_length(bytes raw_data):
-    # type: (bytes) -> (int, int)
     r""" Get length of uncompressed data from a header of Compress::LZF
     output. Check Compress::LZF sources for the definition of this bit magic
         (namely, LZF.xs, decompress_sv)
@@ -284,7 +287,7 @@ cdef (int, int) lzf_length(bytes raw_data):
         # compressed size, header length, uncompressed size
         uint32_t csize=len(raw_data), start=1, usize
         # first byte, mask, buffer iterator placeholder
-        uint8_t lower=nth_byte(raw_data, 0), mask=0x80, b
+        uint8_t lower=raw_data[0], mask=0x80, b
 
     while mask and csize > start and (lower & mask):
         mask >>= 1 + (mask == 0x80)
@@ -313,7 +316,7 @@ def decomp(bytes raw_data):
     """
     if not raw_data:
         return b''
-    if nth_byte(raw_data, 0) == 0:
+    if raw_data[0] == 0:
         return raw_data[1:]
     start, usize = lzf_length(raw_data)
     # while it is tempting to include liblzf and link statically, there is
@@ -331,21 +334,10 @@ cdef uint32_t fnvhash(bytes data):
     cdef:
         uint32_t hval = 0x811c9dc5
         uint8_t b
-    for b in data:
+    for b in data:  
         hval ^= b
         hval *= 0x01000193
     return hval
-
-
-def cached_property(func):
-    """ Classic memoize with @property on top"""
-    @wraps(func)
-    def wrapper(self):
-        key = '_' + func.__name__
-        if not hasattr(self, key):
-            setattr(self, key, func(self))
-        return getattr(self, key)
-    return property(wrapper)
 
 
 def slice20(bytes raw_data):
@@ -377,6 +369,7 @@ class CommitTimezone(tzinfo):
         h, m = divmod(self.offset.seconds // 60, 60)
         return "<Timezone: %02d:%02d>" % (h, m)
 
+
 DAY_Z = datetime.fromtimestamp(0, CommitTimezone(0, 0))
 
 
@@ -405,7 +398,7 @@ def parse_commit_date(bytes timestamp, bytes tz):
         int sign = -1 if tz.startswith(b'-') else 1
         uint32_t ts
         int hours, minutes
-        uint8_t tz_len = len(tz)
+        uint8_t tz_len = len(tz)  
     try:
         ts = int(timestamp)
         hours = sign * int(tz[tz_len-4:tz_len-2])
@@ -479,20 +472,20 @@ cdef class Hash:
             buf = <char *>tchdbiternext(self._db, &sp)
             if buf is NULL:
                 break
-            key = PyBytes_FromStringAndSize(buf, sp)
+            key = PyBytes_FromStringAndSize(buf, sp)  
             free(buf)
             yield key
 
     cdef bytes read(self, bytes key):
         cdef:
-            char *k = key
+            char *k = key  
             char *buf
             int sp
             int ksize=len(key)
         buf = <char *>tchdbget(self._db, k, ksize, &sp)
         if buf is NULL:
-            raise ObjectNotFound()
-        cdef bytes value = PyBytes_FromStringAndSize(buf, sp)
+            raise ObjectNotFound(key)
+        cdef bytes value = PyBytes_FromStringAndSize(buf, sp)  
         free(buf)
         return value
 
@@ -522,18 +515,181 @@ def _get_tch(char *path):
         # in multithreading environment this can cause race condition,
         # so we need a lock
         if path not in _TCH_POOL:
-            _TCH_POOL[path] = Hash(path)
+            _TCH_POOL[path] = Hash(path)  
     finally:
         TCH_LOCK.release()
     return _TCH_POOL[path]
 
+def _get_value(
+    key: bytes,
+    dtype: Tuple[str, str],
+    use_fnv_keys = False
+) -> bytes:
+    """Read value (in BYTES) from tch"""
+    try:
+        path_tmpl, prefix_length = PATHS[dtype][0], PATHS[dtype][1]
+    except KeyError as e:
+        raise KeyError(f'Invalid dtype: {dtype}, expected one of {PATHS.keys()}') from e
+
+    cdef uint8_t p
+    if use_fnv_keys:
+        p = fnvhash(key)  
+    else:
+        p = key[0]  
+    cdef uint8_t prefix = p & (2**prefix_length - 1)
+
+    path_b = path_tmpl.format(key=prefix).encode('ascii')
+
+    return _get_tch(path_b)[key]  
+
+GIT_DTYPES = ('c', 'cc', 'pc', 'r', 'b', 'h', 't')
+    
+def _decode_value(
+    value: bytes,
+    out_dtype: str
+):
+    if out_dtype in GIT_DTYPES:
+        return tuple(
+            value[i:i + 20].hex() for i in range(0, len(value), 20))  # type: Tuple[str, ...]
+    elif out_dtype in ('fa', 'tac'):
+        # TODO: test TAC
+        buf0 = value[0:len(value)-21]
+        cmt_sha = value[(len(value)-20):len(value)]
+        (Time, Author) = buf0.decode('utf-8').split(";")
+        return (Time, Author, cmt_sha.hex())  # type: Tuple[str, str, str]
+    elif out_dtype == 'ta':
+        # TODO: test TA
+        (Time, Author) = value.decode('utf-8').split(";")
+        return (Time, Author)  # type: Tuple[str, str]
+    elif out_dtype in ('p', 'P'):
+        data = decomp(value)
+        return tuple(project_name.decode('utf-8')
+            for project_name in data.split(b';')
+            if project_name and project_name != b'EMPTY')  # type: Tuple[str, ...]
+    elif out_dtype == 'f':
+        data = decomp(value)
+        return tuple(file_name.decode('utf-8')
+            for file_name in (data.split(b";") if data else [])
+            if file_name and file_name != b'EMPTY')  # type: Tuple[str, ...]
+    elif out_dtype == 'dat':
+        return tuple(value.decode('utf-8').split(';'))  # type: Tuple[str, ...]
+    elif out_dtype in ('a', 'A'):
+        data = decomp(value)
+        return tuple(author.decode('utf-8') for author in (data.split(b';') if data else [])
+            if author not in IGNORED_AUTHORS)  # type: Tuple[str, ...]
+    raise ValueError(f'Unsupported dtype: {out_dtype}')
+
+def get_values(
+    dtype: Union[Tuple[str, str], str],
+    key: Union[bytes, str],
+):
+    """Eqivalent to getValues in WoC Perl API
+    >>> get_values('P2c', 'user2589_minicms')  # doctest: +SKIP
+    ...
+    >>> get_values(('P','c'),'user2589_minicms'):  # doctest: +SKIP
+    ...
+    """
+    # transform dtype -> (src, dst)
+    if isinstance(dtype, str):
+        try:
+            dtype = tuple(dtype.split('2'))
+        except ValueError as e:
+            raise ValueError(f'Invalid dtype: {dtype}, expected one of'
+                f'{list(lambda x: x[0] + "2" + x[1] for x in PATHS.keys())}') from e
+ 
+    # use fnv hash as shading idx if key is not a git object
+    _use_fnv_keys = False if dtype[0] in GIT_DTYPES else True
+    if isinstance(key, str):
+        # unhexlify if key is a hex string
+        key = bytes.fromhex(key) \
+            if len(key) == 40 and dtype[0] in GIT_DTYPES \
+            else key.encode('utf-8')
+
+    _out_raw = _get_value(key, dtype, use_fnv_keys=_use_fnv_keys)
+    return _decode_value(_out_raw, dtype[1])
+
+def _decode_content(
+    value: bytes,
+    out_dtype: str
+):
+    if out_dtype == 'tch':
+        return decomp(value).decode('utf-8')
+    raise ValueError(f'Unsupported dtype: {out_dtype}')
+
+class BlobRawReader:
+    _cache = {}
+    @classmethod
+    def read_mmap(
+        cls, 
+        path: str,
+        offset: int,
+        length: int,
+        mode = 'rb'
+    ):
+        if path in BlobRawReader._cache:
+            _m = BlobRawReader._cache[path]
+        else:
+            _f = open(path, mode)
+            _m = mmap.mmap(_f.fileno(), 0, access=mmap.ACCESS_READ)
+            BlobRawReader._cache[path] = _m
+        
+        _m.seek(offset)
+        _m.read(length)
+
+# TODO: cache instances
+def read_file_with_offset(file_path, offset, length):
+    with open (file_path, "rb") as _f:
+        _f.seek(offset)
+        return _f.read(length)
+
+def _get_predix(
+    key: bytes,
+    dtype: Tuple[str, str],
+    use_fnv_keys = False
+):
+    """Calculate prefix (in BYTES) from tch"""
+    try:
+        path_tmpl, prefix_length = PATHS[dtype][0], PATHS[dtype][1]
+    except KeyError as e:
+        raise KeyError(f'Invalid dtype: {dtype}, expected one of {PATHS.keys()}') from e
+
+    cdef uint8_t p
+    if use_fnv_keys:
+        p = fnvhash(key)  
+    else:
+        p = key[0]  
+    prefix = p & (2**prefix_length - 1)
+    return prefix
+
+def show_content(
+    in_dtype: str,
+    key: Union[bytes, str],
+):
+    """Eqivalent to showCnt in WoC perl API
+    >>> show_content('tree', '7a374e58c5b9dec5f7508391246c48b73c40d200')  # doctest: +SKIP
+    ...
+    """
+    dtype = (_full_name_to_short[in_dtype], 'tch')
+    if isinstance(key, str):
+        key = bytes.fromhex(key)
+    _out_raw = _get_value(key, dtype, use_fnv_keys=False)
+    if in_dtype in ('commit', 'tree'):
+        return _decode_content(_out_raw, dtype[1])
+    elif in_dtype == 'blob':
+        offset, length = unber(_out_raw)
+        _prefix = _get_predix(key, ('b', 'bin'), use_fnv_keys=False)
+        _path = PATHS[('b', 'bin')][0].format(key=_prefix)
+        _out_bin = read_file_with_offset(_path, offset, length)
+        return decomp(_out_bin).decode('utf-8')
+    else:
+        raise ValueError(f'Unsupported dtype: {in_dtype}, expected one of ("commit", "blob", "tree")')
 
 class _Base(object):
     type = 'oscar_base'  # type: str
-    key = None  # type: bytes
+    key = b'!Err!'  # type: bytes
     # fnv keys are used for non-git objects, such as files, projects and authors
     use_fnv_keys = True  # type: bool
-    _keys_registry_dtype = None  # type: str
+    _keys_registry_dtype = ('Err', 'Err')  # type: Tuple[str, str]
 
     def __init__(self, key):
         self.key = key
@@ -554,28 +710,27 @@ class _Base(object):
 
     def __str__(self):
         return (binascii.hexlify(self.key).decode('ascii')
-                if isinstance(self.key, bytes_type) else self.key)
+                if isinstance(self.key, bytes) else self.key)
 
     def resolve_path(self, dtype):
         """ Get path to a file using data type and object key (for sharding)
         """
-        path, prefix_length = PATHS[dtype]
+        path, prefix_length = PATHS[dtype][0], PATHS[dtype][1]
 
         cdef uint8_t p
         if self.use_fnv_keys:
-            p = fnvhash(self.key)
+            p = fnvhash(self.key)  
         else:
-            p = nth_byte(self.key, 0)
+            p = self.key[0]  
         cdef uint8_t prefix = p & (2**prefix_length - 1)
         return path.format(key=prefix)
 
-    def read_tch(self, dtype):
-        """ Resolve the path and read .tch"""
-        path = self.resolve_path(dtype).encode('ascii')
-        try:
-            return _get_tch(path)[self.key]
-        except KeyError:
-            return None
+    def read_tch(self, dtype: Tuple[str, str]):
+        return _get_value(
+            self.key,
+            dtype,
+            use_fnv_keys=self.use_fnv_keys
+        )
 
     @classmethod
     def all_keys(cls):
@@ -589,9 +744,10 @@ class _Base(object):
         if not cls._keys_registry_dtype:
             raise NotImplemented
 
-        base_path, prefix_length = PATHS[cls._keys_registry_dtype]
+        base_path, prefix_length = PATHS[cls._keys_registry_dtype][:2]
         for file_prefix in range(2 ** prefix_length):
-            for key in _get_tch(base_path.format(key=file_prefix).encode('ascii')):
+            for key in _get_tch(
+                base_path.format(key=file_prefix).encode('ascii')):
                 yield key
 
     @classmethod
@@ -606,8 +762,8 @@ class GitObject(_Base):
     @classmethod
     def all(cls):
         """ Iterate ALL objects of this type (all projects, all times) """
-        base_idx_path, prefix_length = PATHS[cls.type + '_sequential_idx']
-        base_bin_path, prefix_length = PATHS[cls.type + '_sequential_bin']
+        base_idx_path, prefix_length = PATHS[cls.type,'idx'][:2]
+        base_bin_path, prefix_length = PATHS[cls.type,'bin'][:2]
         for key in range(2**prefix_length):
             idx_path = base_idx_path.format(key=key)
             bin_path = base_bin_path.format(key=key)
@@ -627,10 +783,10 @@ class GitObject(_Base):
             datafile.close()
 
     def __init__(self, sha):
-        if isinstance(sha, str_type) and len(sha) == 40:
+        if isinstance(sha, str) and len(sha) == 40:
             self.sha = sha
             self.bin_sha = binascii.unhexlify(sha)
-        elif isinstance(sha, bytes_type) and len(sha) == 20:
+        elif isinstance(sha, bytes) and len(sha) == 20:
             self.bin_sha = sha
             self.sha = binascii.hexlify(sha).decode('ascii')
         else:
@@ -643,7 +799,7 @@ class GitObject(_Base):
         if self.type not in ('commit', 'tree'):
             raise NotImplementedError
         # default implementation will only work for commits and trees
-        return decomp(self.read_tch(self.type + '_random'))
+        return decomp(self.read_tch((self.type, 'tch')))
 
     @classmethod
     def string_sha(cls, data):
@@ -696,7 +852,7 @@ class Blob(GitObject):
     def position(self):
         # type: () -> (int, int)
         """ Get offset and length of the blob data in the storage """
-        value = self.read_tch('blob_offset')
+        value = self.read_tch(('b', 'tch'))
         if value is None:  # empty read -> value not found
             raise ObjectNotFound('Blob data not found (bad sha?)')
         return unber(value)
@@ -706,7 +862,7 @@ class Blob(GitObject):
         """ Content of the blob """
         offset, length = self.position
         # no caching here to stay thread-safe
-        with open(self.resolve_path('blob_data'), 'rb') as fh:
+        with open(self.resolve_path('blob.bin'), 'rb') as fh:
             fh.seek(offset)
             return decomp(fh.read(length))
 
@@ -717,7 +873,7 @@ class Blob(GitObject):
 
         **NOTE: commits removing this blob are not included**
         """
-        return slice20(self.read_tch('blob_commits'))
+        return slice20(self.read_tch(('b','c')))
 
     @property
     def commits(self):
@@ -731,7 +887,7 @@ class Blob(GitObject):
     def first_author(self):
         """ get time, first author and first commit for the blob
         """
-        buf = self .read_tch ('blob_first_author')
+        buf = self.read_tch(('b','fa'))
         buf0 = buf [0:len(buf)-21]
         cmt_sha = buf [(len(buf)-20):len(buf)]
         (Time, Author) = buf0 .decode('ascii') .split(";")
@@ -799,13 +955,13 @@ class Tree(GitObject):
         while i < len(data):
             # mode
             start = i
-            while i < len(data) and nth_byte(data, i) != 32:  # 32 is space
+            while i < len(data) and data[i] != 32:  # 32 is space
                 i += 1
             mode = data[start:i]
             i += 1
             # file name
             start = i
-            while i < len(data) and <char> nth_byte(data, i) != 0:
+            while i < len(data) and <char>data[i] != 0:
                 i += 1
             fname = data[start:i]
             # sha
@@ -821,9 +977,9 @@ class Tree(GitObject):
             return item.key in self.files
         elif isinstance(item, Blob):
             return item.bin_sha in self.blob_shas
-        elif isinstance(item, str_type) and len(item) == 40:
+        elif isinstance(item, str) and len(item) == 40:
             item = binascii.unhexlify(item)
-        elif not isinstance(item, bytes_type):
+        elif not isinstance(item, bytes):
             return False
 
         return item in self.blob_shas or item in self.files
@@ -852,7 +1008,7 @@ class Tree(GitObject):
                     yield mode2, fname + b'/' + fname2, sha2
 
     @cached_property
-    def str(self):
+    def __str__(self):
         """
         >>> print(Tree('954829887af5d9071aa92c427133ca2cdd0813cc'))
         100644 __init__.py ff1f7925b77129b31938e76b5661f0a2c4500556
@@ -1065,7 +1221,7 @@ class Commit(GitObject):
         try:
             self.header, self.full_message = self.data.split(b'\n\n', 1)
         except ValueError:   # Sometimes self.data == b''
-            raise ObjectNotFound()
+            raise ObjectNotFound('Failed to parse output ' + str(self.data))
         self.message = self.full_message.split(b'\n', 1)[0]
         cdef list parent_shas = []
         cdef bytes signature = None
@@ -1229,7 +1385,7 @@ class Commit(GitObject):
         >>> 'user2589_minicms' in c.project_names
         True
         """
-        data = decomp(self.read_tch('commit_projects'))
+        data = decomp(self.read_tch(('c','p')))
         return tuple(project_name for project_name in data.split(b';')
                      if project_name and project_name != 'EMPTY')
 
@@ -1248,7 +1404,7 @@ class Commit(GitObject):
         >>> Commit('1e971a073f40d74a1e72e07c682e1cba0bae159b').child_shas
         ('9bd02434b834979bb69d0b752a403228f2e385e8',)
         """
-        return slice20(self.read_tch('commit_children'))
+        return slice20(self.read_tch(('c','cc')))
 
     @property
     def children(self):
@@ -1274,7 +1430,7 @@ class Commit(GitObject):
 
     @cached_property
     def changed_file_names(self):
-        data = decomp(self.read_tch('commit_files'))
+        data = decomp(self.read_tch(('c','f')))
         return tuple((data and data.split(b';')) or [])
 
     def files_changed(self):
@@ -1295,7 +1451,7 @@ class Commit(GitObject):
             'This relation is known to miss every first file in all trees. '
             'Consider using Commit.tree.blobs as a slower but more accurate '
             'alternative', DeprecationWarning)
-        return slice20(self.read_tch('commit_blobs'))
+        return slice20(self.read_tch(('c','b')))
 
     @property
     def blobs(self):
@@ -1315,11 +1471,11 @@ class Commit(GitObject):
         >>> oscar.Commit("80b4ca99f8605903d8ac6bd921ebedfdfecdd660").attributes
         ['1432848535', '-0400', 'Robert Lefebvre <robert.lefebvre@gmail.com>', '8a08c812a15051605da7c594b970cad57ec07e3b', 'd24664ccf959bd6e5bacb8ad2c0ceebcdcc8551c']
         """
-        return self.read_tch ('commit_data').decode('ascii').split(";")
+        return self.read_tch(('c','dat')).decode('ascii').split(";")
 
     @cached_property
     def files(self):
-        data = decomp(self.read_tch('commit_files'))
+        data = decomp(self.read_tch(('c','f')))
         return tuple(file_name
                      for file_name in (data and data.split(b";")) or []
                      if file_name and file_name != 'EMPTY')
@@ -1351,10 +1507,10 @@ class Project(_Base):
     """
 
     type = 'project'
-    _keys_registry_dtype = 'project_commits'
+    _keys_registry_dtype = 'p2c'
 
     def __init__(self, uri):
-        if isinstance(uri, str_type):
+        if isinstance(uri, str):
             uri = uri.encode('ascii')
         self.uri = uri
         super(Project, self).__init__(uri)
@@ -1381,9 +1537,9 @@ class Project(_Base):
     def __contains__(self, item):
         if isinstance(item, Commit):
             key = item.key
-        elif isinstance(item, bytes_type) and len(item) == 20:
+        elif isinstance(item, bytes) and len(item) == 20:
             key = item
-        elif isinstance(item, str_type) and len(item) == 40:
+        elif isinstance(item, str) and len(item) == 40:
             key = binascii.unhexlify(item)
         else:
             return False
@@ -1398,7 +1554,7 @@ class Project(_Base):
         ('2dbcd43f077f2b5511cc107d63a0b9539a6aa2a7',
          '7572fc070c44f85e2a540f9a5a05a95d1dd2662d')
         """
-        return slice20(self.read_tch('project_commits'))
+        return slice20(self.read_tch(('p','c')))
 
     @property
     def commits(self):
@@ -1529,7 +1685,7 @@ class Project(_Base):
 
     @cached_property
     def author_names(self):
-        data = decomp(self.read_tch('project_authors'))
+        data = decomp(self.read_tch(('p','a')))
         return tuple(author_name
                      for author_name in (data and data.split(b';')) or []
                      if author_name and author_name != 'EMPTY')
@@ -1543,10 +1699,10 @@ class File(_Base):
         >>> File(b'docs/Index.rst')  # doctest: +SKIP
     """
     type = 'file'
-    _keys_registry_dtype = 'file_commits'
+    _keys_registry_dtype = 'f2c'
 
     def __init__(self, path):
-        if isinstance(path, str_type):
+        if isinstance(path, str):
             path = path.encode('utf8')
         self.path = path
         super(File, self).__init__(path)
@@ -1577,7 +1733,7 @@ class File(_Base):
         >>> len(commits[0]) == 40
         True
         """
-        return slice20(self.read_tch('file_commits'))
+        return slice20(self.read_tch(('f','c')))
 
     @property
     def commits(self):
@@ -1616,10 +1772,10 @@ class Author(_Base):
     author, so keep in mind this object represents an alias, not a person.
     """
     type = 'author'
-    _keys_registry_dtype = 'author_commits'
+    _keys_registry_dtype = 'a2c'
 
     def __init__(self, full_email):
-        if isinstance(full_email, str_type):
+        if isinstance(full_email, str):
             full_email = full_email.encode('utf8')
         self.full_email = full_email
         super(Author, self).__init__(full_email)
@@ -1638,7 +1794,7 @@ class Author(_Base):
         >>> len(commits[0]) == 40
         True
         """
-        return slice20(self.read_tch('author_commits'))
+        return slice20(self.read_tch(('a','c')))
 
     @property
     def commits(self):
@@ -1655,7 +1811,7 @@ class Author(_Base):
 
     @cached_property
     def file_names(self):
-        data = decomp(self.read_tch('author_files'))
+        data = decomp(self.read_tch(('a','f')))
         return tuple(fname for fname in (data and data.split(b';')))
 
     @cached_property
@@ -1663,7 +1819,7 @@ class Author(_Base):
         """ URIs of projects where author has committed to
         A generator of all Commit objects authored by the Author
         """
-        data = decomp(self.read_tch('author_projects'))
+        data = decomp(self.read_tch(('a','p')))
         return tuple(project_name
                      for project_name in (data and data.split(b';'))
                      if project_name and project_name != b'EMPTY')
