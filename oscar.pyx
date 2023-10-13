@@ -558,14 +558,19 @@ def _decode_value(
     if out_dtype in GIT_DTYPES:
         return tuple(
             value[i:i + 20].hex() for i in range(0, len(value), 20))  # type: Tuple[str, ...]
-    elif out_dtype in ('fa', 'tac'):
-        # TODO: test TAC
+    elif out_dtype == 'fa':
         buf0 = value[0:len(value)-21]
         cmt_sha = value[(len(value)-20):len(value)]
         (Time, Author) = buf0.decode('utf-8').split(";")
         return (Time, Author, cmt_sha.hex())  # type: Tuple[str, str, str]
+    elif out_dtype == 'tac':
+        data = decomp(value)
+        _splited = data.decode('utf-8').split(";")
+        return tuple(
+            (_splited[i],_splited[i+1],_splited[i+2])
+            for i in range(0, len(_splited), 3)
+        )  # type: Tuple[Tuple[str, str, str], ...]
     elif out_dtype == 'ta':
-        # TODO: test TA
         (Time, Author) = value.decode('utf-8').split(";")
         return (Time, Author)  # type: Tuple[str, str]
     elif out_dtype in ('p', 'P'):
