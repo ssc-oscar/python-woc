@@ -620,15 +620,51 @@ def get_values(
     _out_raw = _get_value(key, dtype, use_fnv_keys=_use_fnv_keys)
     return _decode_value(_out_raw, dtype[1])
 
+def _decode_tree(
+    value: bytes
+) -> Tuple[Tuple[str, str, str], ...]:
+    # Format description:  https://stackoverflow.com/questions/14790681/
+    #     mode   (ASCII encoded decimal)
+    #     SPACE (\0x20)
+    #     filename
+    #     NULL (\x00)
+    #     20-byte binary hash
+    _out_buf = []
+    _file_buf = []
+    _curr_buf = bytes()
+    
+    # inefficient, but works
+    i = 0
+    while i < len(value):
+        if value[i] == 0x20:
+            _file_buf.append(_curr_buf.decode('utf-8'))
+            _curr_buf = bytes()
+        elif value[i] == 0x00:
+            _file_buf.append(_curr_buf.decode('utf-8'))
+            # take next 20 bytes as a hash
+            _curr_buf = value[i+1:i+21]
+            _file_buf.append(_curr_buf.hex())
+            _out_buf.append(tuple(_file_buf))
+            # clear buffers
+            _file_buf = []
+            _curr_buf = bytes()
+            i += 20
+        else:
+            _curr_buf += bytes([value[i]])
+        i += 1
+
+    return tuple(_out_buf)
+
 def _decode_content(
     value: bytes,
-    out_dtype: str
+    dtype: Tuple[str, str]
 ):
-    if out_dtype == 'tch':
+    if dtype == ('c', 'tch'):
         return decomp(value).decode('utf-8')
-    raise ValueError(f'Unsupported dtype: {out_dtype}')
+    elif dtype == ('t', 'tch'):
+        return _decode_tree(decomp(value))
+    raise ValueError(f'Unsupported dtype: {dtype}')
 
-# TODO: cache instances
 _file_obj_pool = {}
 def read_file_with_offset(file_path, offset, length):
     _f = _file_obj_pool.setdefault(file_path, open(file_path, "rb"))
@@ -668,7 +704,7 @@ def show_content(
         key = bytes.fromhex(key)
     _out_raw = _get_value(key, dtype, use_fnv_keys=False)
     if in_dtype in ('commit', 'tree'):
-        return _decode_content(_out_raw, dtype[1])
+        return _decode_content(_out_raw, dtype)
     elif in_dtype == 'blob':
         offset, length = unber(_out_raw)
         _prefix = _get_predix(key, ('b', 'bin'), use_fnv_keys=False)
@@ -1001,7 +1037,6 @@ class Tree(GitObject):
                 for mode2, fname2, sha2 in Tree(sha).traverse():
                     yield mode2, fname + b'/' + fname2, sha2
 
-    @cached_property
     def __str__(self):
         """
         >>> print(Tree('954829887af5d9071aa92c427133ca2cdd0813cc'))
