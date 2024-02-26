@@ -1,0 +1,53 @@
+{
+    "wocSchemaVersion": 1,
+    "entities": {
+        "a": "author",
+        "A": "author_unalised",
+        "b": "blob",
+        "c": "commit",
+        "cc": "child_commit",
+        "f": "file",
+        "fa": "first_author",
+        "t": "tree",
+        "h": "head",
+        "p": "project",
+        "P": "project_deforked",
+        "pc": "parent_commit",
+        "r": "root_commit",
+        "ta": "time_author",
+        "tac": "time_author_commit",
+        "trp": "torvalds_path",
+        "dat": "colon_seperated_data",
+        "tch": "compressed_data",
+        "bin": "binary_data",
+        "idx": "binary_index"
+    },
+    "dtypes": {
+        "h": "hex",
+        "s": "string",
+        "cs": "compressed_string",
+        "sh": "string_hex",
+        "hhwww": "hex_hex_url",
+        "cs3": "compressed_3_strings"
+    },
+    "sites": {
+        "bitbucket.org": "bitbucket.org",
+        "gitlab.com": "gitlab.com",
+        "android.googlesource.com": "android.googlesource.com",
+        "bioconductor.org": "bioconductor.org",
+        "drupal.com": "git.drupal.org",
+        "git.eclipse.org": "git.eclipse.org",
+        "git.kernel.org": "git.kernel.org",
+        "git.postgresql.org": "git.postgresql.org",
+        "git.savannah.gnu.org": "git.savannah.gnu.org",
+        "git.zx2c4.com": "git.zx2c4.com",
+        "gitlab.gnome.org": "gitlab.gnome.org",
+        "kde.org": "anongit.kde.org",
+        "repo.or.cz": "repo.or.cz",
+        "salsa.debian.org": "salsa.debian.org",
+        "sourceforge.net": "git.code.sf.net/p"
+    },
+    "ignoredAuthors": [
+        "GitHub Merge Button <merge-button@github.com>"
+    ]
+}

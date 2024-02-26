@@ -77,3 +77,6 @@ target/
 # archive files
 *gz
 *.zip
+
+# Profiles
+wocprofile.json
