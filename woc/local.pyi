@@ -13,12 +13,12 @@ class WocMapsLocal(WocMapsBase):
         self,
         map_name: str,
         key: Union[bytes, str],
-    ):
+    ) -> (list[str] | tuple[str, str, str] | list[tuple[str, str, str]]):
         ...
 
     def show_content(
         self,
         obj: WocObjectsWithContent,
         key: Union[bytes, str],
-    ):
+    ) -> (list[tuple[str, str, str]] | str):
         ...

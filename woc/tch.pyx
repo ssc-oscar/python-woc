@@ -1,4 +1,4 @@
-# cython: language_level=3str, wraparound=False, boundscheck=False, nonecheck=False
+# cython: language_level=3str, wraparound=False, boundscheck=False, nonecheck=False, profile=True
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 # @authors: Runzhi He <rzhe@pku.edu.cn>

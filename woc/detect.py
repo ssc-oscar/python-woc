@@ -9,7 +9,7 @@ import json
 import logging
 import argparse
 import re
-from typing import Dict, Iterable, Tuple, Optional
+from typing import Iterable, Tuple, Optional
 from functools import cmp_to_key
 
 DEFAULT_PROFILE = os.path.join(os.path.dirname(__file__), 'wocprofile.default.json')
@@ -129,6 +129,7 @@ def detect_profile(
     paths: Iterable[str],
     version: Optional[str] = None,
     preset_path: str = DEFAULT_PROFILE,
+    check_missing: bool = True
 ):
     _maps, _objs = {}, {}
 
@@ -203,7 +204,7 @@ def detect_profile(
                     continue
                 _logger.warning(f'Unrecognized file: {f}')
 
-    # transform maps and objs   
+    # transform maps  
     _ls_maps = {}
     for k, v in _maps.items():
         _to_drop = []
@@ -214,7 +215,7 @@ def detect_profile(
                 _ls[kkk] = vvv
             # see if we can find the None in _ls
             _nones = [i for i, x in enumerate(_ls) if x is None]
-            if _nones:
+            if _nones and check_missing:
                 _logger.warning(f'Cannot find shards {", ".join(map(str, _nones))} in map {k} ver {ver}, skipping')
                 _logger.warning(f"Got: {vv['shards']}")
                 _to_drop.append(ver)
@@ -224,12 +225,15 @@ def detect_profile(
             del v[ver]
 
         # move latest maps to the front of the list
-        _ls_maps[k] = [v for k, v in sorted(
+        if len(v) == 0:
+            continue
+        _ls_maps[k] = [vv for _, vv in sorted(
             v.items(), 
             key=cmp_to_key(lambda x, y: compare_woc_version(x[0], y[0])),
             reverse=True
         )]
 
+    # transform objects
     _ls_objs = {}
     for k, v in _objs.items():
         # convert shards to list
@@ -238,7 +242,7 @@ def detect_profile(
             _ls[kk] = vv
         # see if we can find the None in _ls
         _nones = [i for i, x in enumerate(_ls) if x is None]
-        if _nones:
+        if _nones and check_missing:
             _logger.warning(f'Cannot find shards {", ".join(map(str, _nones))} in obj {k}, skipping')
             _logger.warning(f"Got: {v['shards']}")
         else:
@@ -259,7 +263,7 @@ parser.add_argument('paths', metavar='PATH', type=str, nargs='+', help='path to 
 parser.add_argument('--version', type=str, default=None, help='woc mapping version')
 parser.add_argument('--preset', type=str, default=DEFAULT_PROFILE, help='path to preset profile')
 parser.add_argument('--output', type=str, default=None, help='path to output profile')
-
+parser.add_argument('--no-skip-missing', dest='check_missing', action='store_false', help='do not check missing shards')
 
 if __name__ == '__main__':
     import doctest
@@ -267,7 +271,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     
-    res = detect_profile(args.paths, args.version, args.preset)
+    res = detect_profile(args.paths, args.version, args.preset, args.check_missing)
     if args.output:
         with open(args.output, 'w') as f:
             json.dump(res, f, indent=2)

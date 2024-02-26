@@ -1,4 +1,4 @@
-# cython: language_level=3str, wraparound=False, boundscheck=False, nonecheck=False
+# cython: language_level=3str, wraparound=False, boundscheck=False, nonecheck=False, profile=True
 # SPDX-License-Identifier: GPL-3.0-or-later
 # @authors: Runzhi He <rzhe@pku.edu.cn>
 # @date: 2024-01-17
@@ -206,10 +206,10 @@ class WocMapsLocal(WocMapsBase):
                 if v and v != b'EMPTY'] 
         elif out_dtype == 's':  # type: list[str]
             return value.decode('utf-8').split(';')
-        elif out_dtype == 'r':  # type: list[str]
-            data = decomp(value)
-            return [author.decode('utf-8') for author in (data.split(b';') if data else [])
-                if author not in self.config['ignoredAuthors']]
+        elif out_dtype == 'r':  # type: list[str, int]
+            _hex = value[:20].hex()
+            _len = unber(value[20:])[0]
+            return (_hex, _len)
         elif out_dtype == 'hhwww':
             raise NotImplemented
         raise ValueError(f'Unsupported dtype: {out_dtype}')
@@ -298,7 +298,7 @@ class WocMapsLocal(WocMapsBase):
 
     def show_content(
         self,
-        obj: Literal['tree', 'blob', 'commit', 'tkns', 'tag', 'bdiff'],
+        obj: str,
         key: Union[bytes, str],
     ):
         """Eqivalent to showCnt in WoC perl API
@@ -325,13 +325,14 @@ class WocMapsLocal(WocMapsBase):
             )
             return decomp_or_raw(v).decode('utf-8')
         elif obj == 'blob':
-            _map_obj = self.config['objects']['blob.tch']
+            _map_obj = self.config['objects']['sha1.blob.tch']
             v = get_from_tch(key, 
                 shards=_map_obj['shards'],
                 sharding_bits=_map_obj['sharding_bits'],
                 use_fnv_keys=False
             )
             offset, length = unber(v)
+            _map_obj = self.config['objects']['blob.bin']
             shard = get_shard(key, _map_obj['sharding_bits'], use_fnv_keys=False)
             _out_bin = self._read_file_with_offset(
                 _map_obj['shards'][shard],

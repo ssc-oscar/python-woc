@@ -24,11 +24,12 @@
     },
     "dtypes": {
         "h": "hex",
-        "s": "string",
-        "cs": "compressed_string",
-        "sh": "string_hex",
+        "s": "str",
+        "cs": "[compressed]str",
+        "sh": "str_hex",
         "hhwww": "hex_hex_url",
-        "cs3": "compressed_3_strings"
+        "r": "hex_berint",
+        "cs3": "[compressed]str_str_str"
     },
     "sites": {
         "bitbucket.org": "bitbucket.org",
