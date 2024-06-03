@@ -9,7 +9,7 @@ import logging
 import time
 from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t
 from typing import Tuple, Dict, Iterable, List, Union, Literal, Optional
-import zlib
+import gzip
 
 try:
     import lzf
@@ -160,12 +160,12 @@ class WocMapsLocal(WocMapsBase):
                 break
         else:
             raise FileNotFoundError("No wocprofile.json found in the following paths: {}, "
-                                    "run `python3 -m woc detect` to generate".format(profile_path))
+                                    "run `python3 -m woc.detect` to generate".format(profile_path))
 
         # check profile
         assert self.config["wocSchemaVersion"] in WocSupportedProfileVersions, \
                                     "Unsupported wocprofile version: {}".format(self.config["wocSchemaVersion"])
-        assert self.config["maps"], "Run `python3 -m woc detect` to scan data files and generate wocprofile.json"
+        assert self.config["maps"], "Run `python3 -m woc.detect` to scan data files and generate wocprofile.json"
 
     @staticmethod
     def _read_large(path: str, dtype: str) -> bytes:
@@ -176,8 +176,8 @@ class WocMapsLocal(WocMapsBase):
                 return f.read()
         else:
             # use zlib to decompress
-            with open(path, 'rb') as f:
-                _uncompressed = zlib.decompress(f.read())
+            with gzip.open(path, 'rb') as f:
+                _uncompressed = f.read()
                 # find first 256 bytes for b'\n', don't scan the whole document
                 _idx = _uncompressed[:256].find(b'\n')
                 if _idx > 0:
@@ -209,7 +209,9 @@ class WocMapsLocal(WocMapsBase):
                 for v in data.split(b';')
                 if v and v != b'EMPTY'] 
         elif out_dtype == 's':  # type: list[str]
-            return value.decode('utf-8').split(';')
+            print(value[:100])
+            return [v.decode('utf-8')
+                for v in value.split(b';')]
         elif out_dtype == 'r':  # type: list[str, int]
             _hex = value[:20].hex()
             _len = unber(value[20:])[0]
@@ -237,7 +239,7 @@ class WocMapsLocal(WocMapsBase):
                 f'expect one of {", ".join(self.config["maps"].keys())}')
 
         start_time = time.time_ns()
-        logger.debug(f"start get_values: {map_name} {key}")
+        logger.debug(f"get_values: {map_name} {key}")
     
         if _map["dtypes"][0] == 'h':
             if isinstance(key, str):
@@ -252,19 +254,25 @@ class WocMapsLocal(WocMapsBase):
 
         logger.debug(f"hash: {(time.time_ns() - start_time) / 1e6:.2f}ms")
         start_time = time.time_ns()
+        
+        decode_dtype = _map["dtypes"][1]
 
         if "larges" in _map and _hex in _map["larges"]:
-            _bytes = self._read_large(_map["larges"][_hex], _map["dtypes"][0])
+            _bytes = self._read_large(_map["larges"][_hex], _map["dtypes"][1])
             logger.debug(f"read large: {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
+
+            # compress string data is not compressed in larges
+            if decode_dtype == 'cs':
+                decode_dtype = 's'
         else:
             # use fnv hash as shading idx if key is not a git sha
             _bytes = get_from_tch(key, _map["shards"], _map["sharding_bits"], _map["dtypes"][0] != 'h')
             logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
 
-        _ret = self._decode_value(_bytes, _map["dtypes"][1])
-        logger.debug(f"decode value: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+        _ret = self._decode_value(_bytes, decode_dtype)
+        logger.debug(f"decode value: {len(_ret)}items {(time.time_ns() - start_time) / 1e6:.2f}ms")
         return _ret
 
     @staticmethod
@@ -321,8 +329,15 @@ class WocMapsLocal(WocMapsBase):
         >>> show_content('tree', '7a374e58c5b9dec5f7508391246c48b73c40d200')  # doctest: +SKIP
         ...
         """
+        start_time = time.time_ns()
+        logger.debug(f"show_content: {obj} {key}")
+
+
         if isinstance(key, str):
             key = bytes.fromhex(key)
+
+        logger.debug(f"hash: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+        start_time = time.time_ns()
 
         if obj == 'tree':
             _map_obj = self.config['objects']['tree.tch']
@@ -331,7 +346,12 @@ class WocMapsLocal(WocMapsBase):
                 sharding_bits=_map_obj['sharding_bits'],
                 use_fnv_keys=False
             )
-            return self._decode_tree(decomp_or_raw(v))
+            logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            start_time = time.time_ns()
+            _ret = self._decode_tree(decomp_or_raw(v))
+            logger.debug(f"decode tree: {len(_ret)}items {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            return _ret
+
         elif obj == 'commit':
             _map_obj = self.config['objects']['commit.tch']
             v = get_from_tch(key, 
@@ -339,7 +359,9 @@ class WocMapsLocal(WocMapsBase):
                 sharding_bits=_map_obj['sharding_bits'],
                 use_fnv_keys=False
             )
+            logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
             return decomp_or_raw(v).decode('utf-8')
+
         elif obj == 'blob':
             _map_obj = self.config['objects']['sha1.blob.tch']
             v = get_from_tch(key, 
@@ -347,6 +369,9 @@ class WocMapsLocal(WocMapsBase):
                 sharding_bits=_map_obj['sharding_bits'],
                 use_fnv_keys=False
             )
+            logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            start_time = time.time_ns()
+
             offset, length = unber(v)
             _map_obj = self.config['objects']['blob.bin']
             shard = get_shard(key, _map_obj['sharding_bits'], use_fnv_keys=False)
@@ -355,7 +380,13 @@ class WocMapsLocal(WocMapsBase):
                 offset,
                 length
             )
-            return decomp_or_raw(_out_bin).decode('utf-8')
+            logger.debug(f"read blob: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            start_time = time.time_ns()
+
+            _ret = decomp_or_raw(_out_bin).decode('utf-8')
+            logger.debug(f"decode blob: len={len(_ret)} {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            return _ret
+
         elif obj == 'tkns':
             raise NotImplemented
         elif obj == 'tag':
