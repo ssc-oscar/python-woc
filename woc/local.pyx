@@ -136,6 +136,14 @@ def slice20(bytes raw_data):
         return ()
     return tuple(raw_data[i:i + 20] for i in range(0, len(raw_data), 20))
 
+def decode_str(bytes raw_data):
+    """ Decode raw_data, detect the encoding if utf-8 fails """
+    try:
+        return raw_data.decode('utf-8')
+    except UnicodeDecodeError:
+        import chardet  # should be rarely used
+        _encoding = chardet.detect(raw_data)['encoding']
+        return raw_data.decode(_encoding, errors='replace')
 
 class WocMapsLocal(WocMapsBase):
     def __init__(self, 
@@ -194,23 +202,22 @@ class WocMapsLocal(WocMapsBase):
         elif out_dtype == 'sh':  # type: tuple[str, str, str]
             buf0 = value[0:len(value)-21]
             cmt_sha = value[(len(value)-20):len(value)]
-            (Time, Author) = buf0.decode('utf-8').split(";")
+            (Time, Author) = decode_str(buf0).split(";")
             return (Time, Author, cmt_sha.hex())  
         elif out_dtype == 'cs3':  # type: list[tuple[str, str, str]]
             data = decomp(value)
-            _splited = data.decode('utf-8').split(";")
+            _splited = decode_str(data).split(";")
             return [
                 (_splited[i],_splited[i+1],_splited[i+2])
                 for i in range(0, len(_splited), 3)
             ] 
         elif out_dtype == 'cs':   # type: list[str]
             data = decomp(value)
-            return [v.decode('utf-8')
+            return [decode_str(v)
                 for v in data.split(b';')
                 if v and v != b'EMPTY'] 
         elif out_dtype == 's':  # type: list[str]
-            print(value[:100])
-            return [v.decode('utf-8')
+            return [decode_str(v)
                 for v in value.split(b';')]
         elif out_dtype == 'r':  # type: list[str, int]
             _hex = value[:20].hex()
@@ -296,10 +303,10 @@ class WocMapsLocal(WocMapsBase):
         i = 0
         while i < len(value):
             if value[i] == 0x20:
-                _file_buf.append(_curr_buf.decode('utf-8'))
+                _file_buf.append(decode_str(_curr_buf))
                 _curr_buf = bytes()
             elif value[i] == 0x00:
-                _file_buf.append(_curr_buf.decode('utf-8'))
+                _file_buf.append(decode_str(_curr_buf))
                 # take next 20 bytes as a hash
                 _curr_buf = value[i+1:i+21]
                 _file_buf.append(_curr_buf.hex())
@@ -360,7 +367,7 @@ class WocMapsLocal(WocMapsBase):
                 use_fnv_keys=False
             )
             logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
-            return decomp_or_raw(v).decode('utf-8')
+            return decode_str(decomp_or_raw(v))
 
         elif obj == 'blob':
             _map_obj = self.config['objects']['sha1.blob.tch']
@@ -383,7 +390,7 @@ class WocMapsLocal(WocMapsBase):
             logger.debug(f"read blob: {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
 
-            _ret = decomp_or_raw(_out_bin).decode('utf-8')
+            _ret = decode_str(decomp_or_raw(_out_bin))
             logger.debug(f"decode blob: len={len(_ret)} {(time.time_ns() - start_time) / 1e6:.2f}ms")
             return _ret
 
