@@ -1,12 +1,14 @@
-# cython: language_level=3str, wraparound=False, boundscheck=False, nonecheck=False, profile=True
+# cython: language_level=3str, wraparound=False, boundscheck=False, nonecheck=False, profile=True, linetrace=True
 # SPDX-License-Identifier: GPL-3.0-or-later
 # @authors: Runzhi He <rzhe@pku.edu.cn>
 # @date: 2024-01-17
 
 import os
 import json
+import logging
+import time
 from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t
-from typing import Tuple, Dict, Iterable, List, Union, Literal
+from typing import Tuple, Dict, Iterable, List, Union, Literal, Optional
 import zlib
 
 try:
@@ -16,7 +18,9 @@ except ImportError or AssertionError:
     raise ImportError('python-lzf is required to decompress LZF-compressed data: `pip install python-lzf`')
 
 from .base import WocMapsBase, WocKeyError, WocObjectsWithContent, WocSupportedProfileVersions
-from .tch cimport fnvhash, get_from_tch, get_shard
+from .tch cimport get_from_tch, get_shard, fnvhash
+
+logger = logging.getLogger(__name__)
 
 cdef unber(bytes buf):
     r""" Perl BER unpacking.
@@ -135,8 +139,8 @@ def slice20(bytes raw_data):
 
 class WocMapsLocal(WocMapsBase):
     def __init__(self, 
-            profile_path: str | Iterable[str] | None = None,
-            version: str | Iterable[str] | None = None
+            profile_path: Union[str, Iterable[str], None] = None,
+            version: Union[str, Iterable[str], None] = None
         ) -> None:
         # load profile
         if profile_path is None:
@@ -231,30 +235,42 @@ class WocMapsLocal(WocMapsBase):
         else:
             raise KeyError(f'Invalid map name: {map_name}, '
                 f'expect one of {", ".join(self.config["maps"].keys())}')
+
+        start_time = time.time_ns()
+        logger.debug(f"start get_values: {map_name} {key}")
     
         if _map["dtypes"][0] == 'h':
             if isinstance(key, str):
                 _hex = key
                 key = bytes.fromhex(key)
             else:
-                _hex = bytes.hex(key)
+                _hex = bytes(key).hex()
         else:
             assert isinstance(key, str), "key must be a string for non-hash keys"
-            _hex = bytes(fnvhash(key.encode('utf-8'))).hex()
+            _hex = hex(fnvhash(key.encode('utf-8')))[2:]
             key = key.encode('utf-8')
+
+        logger.debug(f"hash: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+        start_time = time.time_ns()
 
         if "larges" in _map and _hex in _map["larges"]:
             _bytes = self._read_large(_map["larges"][_hex], _map["dtypes"][0])
+            logger.debug(f"read large: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            start_time = time.time_ns()
         else:
             # use fnv hash as shading idx if key is not a git sha
             _bytes = get_from_tch(key, _map["shards"], _map["sharding_bits"], _map["dtypes"][0] != 'h')
+            logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            start_time = time.time_ns()
 
-        return self._decode_value(_bytes, _map["dtypes"][1])
+        _ret = self._decode_value(_bytes, _map["dtypes"][1])
+        logger.debug(f"decode value: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+        return _ret
 
     @staticmethod
     def _decode_tree(
         value: bytes
-    ) -> list[tuple[str, str, str]]:
+    ) -> List[Tuple[str, str, str]]:
         """
         Decode a tree binary object into tuples
         Reference: https://stackoverflow.com/questions/14790681/

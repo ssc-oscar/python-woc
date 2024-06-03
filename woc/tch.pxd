@@ -1,4 +1,4 @@
-# cython: language_level=3str, wraparound=False, boundscheck=False, nonecheck=False
+# cython: language_level=3str, wraparound=False, boundscheck=False, nonecheck=False, profile=True, linetrace=True
 
 from libc.stdint cimport uint8_t, uint32_t
 
