@@ -7,6 +7,7 @@
 from libc.stdint cimport uint8_t, uint32_t, uint64_t
 from libc.stdlib cimport free
 from threading import Lock
+import os
 
 from .base import WocKeyError
 
@@ -141,6 +142,10 @@ cpdef uint8_t get_shard(bytes key, uint8_t sharding_bits, bint use_fnv_keys):
     return prefix
 
 cpdef bytes get_from_tch(bytes key, list shards, int sharding_bits, bint use_fnv_keys):
+    # not 100% necessary but there are cases where some tchs are miserably missing
+    _shard = get_shard(key, sharding_bits, use_fnv_keys)
+    _path = shards[_shard]
+    assert _path and os.path.exists(_path), f"shard {_shard} not found at {_path}"
     return _get_tch(
         shards[get_shard(key, sharding_bits, use_fnv_keys)].encode('utf-8')
     )[key] 
