@@ -7,3 +7,10 @@ version_variable = ['oscar.pyx:__version__', 'docs/conf.py:release']
 build_command = ''
 # remove_dist deletes all pre-existing files in dist/, including built by manylinux
 remove_dist = false
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]
