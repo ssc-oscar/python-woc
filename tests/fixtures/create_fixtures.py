@@ -1,11 +1,14 @@
-#!/usr/bin/python2
-# IMPORTANT: this script requires python-tokyocabinet, which is Py2 only
+from typing import List, Union
+import gzip
+import json
+try:
+    import lzf
+    assert lzf.decompress
+except ImportError or AssertionError:
+    raise ImportError('python-lzf is required to decompress LZF-compressed data: `pip install python-lzf`')
 
-import binascii
-from collections import defaultdict
-
-from tokyocabinet import hash as tch
-
+from woc.tch import TCHashDB
+from woc.local import *
 
 def ber(*numbers):
     def gen():
@@ -13,122 +16,222 @@ def ber(*numbers):
             a = True
             while a:
                 a, num = divmod(num, 128)
-                yield chr(a + 0x80 if a else num)
+                yield (a + 0x80 if a else num).to_bytes(1, 'big')
     return b''.join(gen())
 
+def encode_value(
+    value,
+    dtype: str
+) -> bytes:
+    if dtype == 'h':  # type: list[str]
+        return b''.join(bytes.fromhex(v) for v in value)
+    elif dtype == 'sh':  # type: tuple[str, str, str]
+        Time, Author, cmt_sha = value
+        buf0 = f"{Time};{Author}".encode()
+        cmt_sha_bytes = bytes.fromhex(cmt_sha)
+        return buf0 + cmt_sha_bytes
+    elif dtype == 'cs3':  # type: list[tuple[str, str, str]]
+        _joined = ';'.join(f"{t[0]};{t[1]};{t[2]}" for t in value)
+        data = _joined.encode
+        return lzf.compress(data)
+    elif dtype == 'cs':  # type: list[str]
+        _joined = ';'.join(v.encode() for v in value if v)
+        return lzf.compress(_joined.encode())
+    elif dtype == 's':  # type: list[str]
+        return b';'.join(v.encode() for v in value)
+    elif dtype == 'r':  # type: list[str, int]
+        _hex, _len = value
+        return bytes.fromhex(_hex) + ber(_len)
+    elif dtype == 'hhwww':
+        raise NotImplemented
+    raise ValueError(f'Unsupported dtype: {dtype}')
 
-def unber(s):
-    res = []
-    acc = 0
-    for char in s:
-        b = ord(char)
-        acc = (acc << 7) + (b & 0x7f)
-        if not b & 0x80:
-            res.append(acc)
-            acc = 0
-    return res
-
-
-def shas2prefixes(shas, max_prefix):
-    # type: (Iterable[str], int) -> Dict[int, str]
-    prefixes = defaultdict(list)
-    for sha in shas:
-        key = binascii.unhexlify(sha)
-        prefixes[ord(key[0]) & max_prefix].append(key)
-    return prefixes
-
-
-def create_fixture(shas, input_path, key_length=7, num_records=1000):
-    # type: (Iterable[str], str, int) -> None
-    """ Create fixtures for local testing.
-    Object type is implicitly given in input_fmask - just copy the data, object
-    structure is not relevant for fixture preparation purposes
-
-    Special cases to handle:
-      - create a placeholder for max prefix to make key length calculation work
-      - prefix 0 .tch should contain num_records
-      - the same prefix 0 .tch should contain a predefined key: value,
-        b'test_key' -> b'\x00\x01\x02\x03'
-
-    """
-    max_prefix = 2**key_length - 1
-    prefixes = shas2prefixes(shas, max_prefix)
-    output_path = input_path.rsplit('/', 1)[-1]
-
-    # - create a placeholder for max prefix to make key length calculation work
-    with open(output_path.format(key=max_prefix), 'wb') as _:
-        pass
-    # - prefix 0 .tch should contain num_records - get enough keys
-    db = tch.Hash(input_path.format(key=0), tch.HDBOREADER | tch.HDBONOLCK)
-    # -1 is to reserve a record for the predefined key: value
-    prefixes[0].extend(db.fwmkeys('')[:num_records-len(prefixes[0]) - 1])
+def write_to_tch(key: bytes, value: bytes, shards: List[str], sharding_bits: int, use_fnv_keys: bool):
+    shard = get_shard(key, sharding_bits, use_fnv_keys)
+    _path = shards[shard]
+    db = TCHashDB(_path.encode())
+    db[key] = value
     db.close()
 
-    for prefix, keys in prefixes.items():
-        db = tch.Hash(output_path.format(key=prefix),
-                      tch.HDBOCREAT | tch.HDBOWRITER)
-        data_db = tch.Hash(input_path.format(key=prefix),
-                           tch.HDBOREADER | tch.HDBONOLCK)
-        for key in keys:
-            db.put(key, data_db[key])
+def write_large(path: str, key: bytes, value: bytes, dtype: str):
+    if dtype == 'h':
+        with open(path, 'wb') as f:
+            f.write(key)
+            f.write(value[:160])
+    else:
+        # use zlib to decompress
+        with gzip.open(path, 'wb') as f:
+            f.write(key)
+            f.write(b'\n')
+            # run a fast scan to find idx of 3rd ';' in value
+            idx = 0
+            for _ in range(3):
+                idx = value.find(b';', idx + 1)
+            f.write(value[:idx])
 
-        # prefix 0 .tch should contain a predefined key: value
-        if not prefix:
-            db.put(b'test_key', b'\x00\x01\x02\x03')
-        db.close()
-        data_db.close()
+class WocMapsCopier(WocMapsLocal):
+    def __init__(self, config1, config2):
+        super().__init__(config1)
+        with open(config2) as f:
+            self.config2 = json.load(f)
 
+    def get_values_raw(self, map_name, key):
+        if map_name in self.config["maps"]:
+            _map = self.config["maps"][map_name][0]
+        elif map_name in self.config["objects"]:
+            _map = self.config["objects"][map_name]
+        else:
+            raise KeyError(f'Invalid map name: {map_name}, '
+                f'expect one of {", ".join(self.config["maps"].keys())}')
 
-def create_blob_fixture(shas, key_length=7):
-    max_prefix = 2**key_length - 1
-    prefixes = shas2prefixes(shas, max_prefix)
+        if _map["dtypes"][0] == 'h':
+            if isinstance(key, str):
+                _hex = key
+                key = bytes.fromhex(key)
+            else:
+                _hex = bytes(key).hex()
+        else:
+            assert isinstance(key, str), "key must be a string for non-hash keys"
+            _hex = hex(fnvhash(key.encode('utf-8')))[2:]
+            key = key.encode('utf-8')
 
-    blob_content = b'*.egg-info/\ndist/\nbuild/\n*.pyc\n*.mo\n*.gz\n'
+        if "larges" in _map and _hex in _map["larges"]:
+            print('reading large', _map["larges"][_hex], 'key', key, 'type', _map["dtypes"][1])
+            return read_large(_map["larges"][_hex], _map["dtypes"][1])
+        else:
+            print('reading from tch', key, _map["shards"], _map["sharding_bits"], _map["dtypes"][0] != 'h')
+            return get_from_tch(key, _map["shards"], _map["sharding_bits"], _map["dtypes"][0] != 'h')
 
-    offset_input_path = '/fast/All.sha1o/sha1.blob_{key}.tch'
-    offset_output_path = offset_input_path.rsplit('/', 1)[-1]
-    data_input_path = '/da4_data/All.blobs/blob_{key}.bin'
-    data_output_path = data_input_path.rsplit('/', 1)[-1]
+    def show_content_raw(
+        self,
+        obj: str,
+        key: Union[bytes, str],
+    ):
+        if isinstance(key, str):
+            key = bytes.fromhex(key)
 
-    with open(offset_output_path.format(key=max_prefix), 'wb') as _:
-        pass
-    with open(data_output_path.format(key=max_prefix), 'wb') as _:
-        pass
+        if obj == 'tree':
+            _map_obj = self.config['objects']['tree.tch']
+            print('reading from tch', key, _map_obj['shards'], _map_obj['sharding_bits'])
+            v = get_from_tch(key, 
+                shards=_map_obj['shards'],
+                sharding_bits=_map_obj['sharding_bits'],
+                use_fnv_keys=False
+            )
+            return v
 
-    for prefix, keys in prefixes.items():
-        offset_out = tch.Hash(offset_output_path.format(key=prefix),
-                              tch.HDBOCREAT | tch.HDBOWRITER)
-        data_out = open(data_output_path.format(key=prefix), 'wb')
-        offset_in = tch.Hash(offset_input_path.format(key=prefix),
-                             tch.HDBOREADER | tch.HDBONOLCK)
-        data_in = open(data_input_path.format(key=prefix), 'rb')
+        elif obj == 'commit':
+            _map_obj = self.config['objects']['commit.tch']
+            print('reading from tch', key, _map_obj['shards'], _map_obj['sharding_bits'])
+            v = get_from_tch(key, 
+                shards=_map_obj['shards'],
+                sharding_bits=_map_obj['sharding_bits'],
+                use_fnv_keys=False
+            )
+            return v
 
-        pos = 0
-        for key in keys:
-            offset, length = unber(offset_in[key])
-            data_in.seek(offset, 0)
-            blob_data = data_in.read(length)
-            data_out.write(blob_data)
-            offset_out.put(key, ber(pos, length))
-            pos += length
+        elif obj == 'blob':
+            _map_obj = self.config['objects']['sha1.blob.tch']
+            print('reading from tch', key, _map_obj['shards'], _map_obj['sharding_bits'])
+            v = get_from_tch(key, 
+                shards=_map_obj['shards'],
+                sharding_bits=_map_obj['sharding_bits'],
+                use_fnv_keys=False
+            )
 
-        data_out.close()
-        offset_out.close()
+            offset, length = unber(v)
+            print('reading from blob', _map_obj['shards'][0], offset, length)
+            _map_obj = self.config['objects']['blob.bin']
+            shard = get_shard(key, _map_obj['sharding_bits'], use_fnv_keys=False)
+            with open(_map_obj['shards'][shard], "rb") as f:
+                f.seek(offset)
+                _out_bin = f.read(length)
+            return (v, _out_bin)
+        
+        else:
+            raise ValueError(f'Unsupported object type: {obj}, expected one of tree, blob, commit')
+        
 
+    def copy_values(self, map_name, key):
+        """One large file can only contain one record"""
+        value = self.get_values_raw(map_name, key)
 
-def main():
-    # only 83d22195edc1473673f1bf35307aea6edf3c37e3 is actually used:
-    create_blob_fixture([u'234a57538f15d72f00603bf086b465b0f2cda7b5',
-                         u'83d22195edc1473673f1bf35307aea6edf3c37e3',
-                         u'fda94b84122f6f36473ca3573794a8f2c4f4a58c',
-                         u'46aaf071f1b859c5bf452733c2583c70d92cd0c8'])
-    create_fixture([u'd4ddbae978c9ec2dc3b7b3497c2086ecf7be7d9d'],
-                   '/fast/All.sha1c/tree_{key}.tch')
-    create_fixture([u'f2a7fcdc51450ab03cb364415f14e634fa69b62c',
-                    u'e38126dbca6572912013621d2aa9e6f7c50f36bc',
-                    u'1cc6f4418dcc09f64dcbb0410fec76ceaa5034ab'],
-                   '/fast/All.sha1c/commit_{key}.tch')
+        if map_name in self.config2["maps"]:
+            _map = self.config2["maps"][map_name][0]
+        elif map_name in self.config2["objects"]:
+            _map = self.config2["objects"][map_name]
+        else:
+            raise KeyError(f'Invalid map name: {map_name}, '
+                f'expect one of {", ".join(self.config2["maps"].keys())}')
+        
+        if _map["dtypes"][0] == 'h':
+            if isinstance(key, str):
+                _hex = key
+                key = bytes.fromhex(key)
+            else:
+                _hex = bytes(key).hex()
+        else:
+            assert isinstance(key, str), "key must be a string for non-hash keys"
+            _hex = hex(fnvhash(key.encode('utf-8')))[2:]
+            key = key.encode('utf-8')
 
+        if "larges" in _map and _hex in _map["larges"]:
+            print('writing large', _map["larges"][_hex], 'key', key, 'dtype', _map["dtypes"][1])
+            return write_large(_map["larges"][_hex], key, value, _map["dtypes"][1])
+        else:
+            # use fnv hash as shading idx if key is not a git sha
+            print('writing to tch', key, _map["shards"], _map["sharding_bits"], _map["dtypes"][0] != 'h')
+            return write_to_tch(key, value, _map["shards"], _map["sharding_bits"], _map["dtypes"][0] != 'h')
+        
+    def copy_content(self, obj: str, key: Union[bytes, str]):
+        """One blob shard can only contain one record"""
+        value = self.show_content_raw(obj, key)
+
+        if obj == 'tree':
+            _map_obj = self.config2['objects']['tree.tch']
+            print('writing to tch', key, _map_obj["shards"], _map_obj["sharding_bits"])
+            write_to_tch(key.encode(), value, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=False)
+        
+        elif obj == 'commit':
+            _map_obj = self.config2['objects']['commit.tch']
+            print('writing to tch', key, _map_obj["shards"], _map_obj["sharding_bits"])
+            write_to_tch(key.encode(), value, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=False)
+        
+        elif obj == 'blob':
+            _map_obj = self.config2['objects']['sha1.blob.tch']
+            _idx, _v = value
+            offset, length = unber(_idx)
+            _idx = ber(0, length)
+            print('writing to tch', key, _map_obj["shards"], _map_obj["sharding_bits"])
+            write_to_tch(key.encode(), _idx, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=False)
+            _map_obj = self.config2['objects']['blob.bin']
+            print('writing to file', _map_obj['shards'][0], length)
+            with open(_map_obj['shards'][0], "ab") as f:
+                f.write(_v)
+        
+        else:
+            raise ValueError(f'Unsupported object type: {obj}, expected one of tree, blob, commit')
+        
 
 if __name__ == '__main__':
-    main()
+    cp = WocMapsCopier('./wocprofile.json', './tests/test_profile.json')
+    cp.copy_values('c2p', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
+    cp.copy_values('c2dat', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
+    cp.copy_values('b2tac', '05fe634ca4c8386349ac519f899145c75fff4169')
+    cp.copy_values('p2a', 'ArtiiQ_PocketMine-MP')
+    cp.copy_values('b2c', '05fe634ca4c8386349ac519f899145c75fff4169')
+    cp.copy_values('b2c', '3f2eca18f1bc0f3117748e2cea9251e5182db2f7') # large
+    cp.copy_values('a2c', 'Audris Mockus <audris@utk.edu>')
+    # cp.copy_values('c2cc', 'e4af89166a17785c1d741b8b1d5775f3223f510f') # null
+    cp.copy_values('a2f', 'Audris Mockus <audris@utk.edu>')
+    cp.copy_values('c2f', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
+    cp.copy_values('c2b', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
+    cp.copy_values('p2c', 'ArtiiQ_PocketMine-MP')
+    cp.copy_values('f2a', 'youtube-statistics-analysis.pdf')
+    cp.copy_values('b2f', '05fe634ca4c8386349ac519f899145c75fff4169')
+    cp.copy_values('c2r', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
+    cp.copy_values('b2fa', '05fe634ca4c8386349ac519f899145c75fff4169')
+    cp.copy_content('tree', 'f1b66dcca490b5c4455af319bc961a34f69c72c2')
+    cp.copy_content('commit', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
+    cp.copy_content('blob', '05fe634ca4c8386349ac519f899145c75fff4169')
+    cp.copy_content('blob', '46aaf071f1b859c5bf452733c2583c70d92cd0c8')
