@@ -99,7 +99,7 @@ class WocMapsCopier(WocMapsLocal):
             print('reading large', _map["larges"][_hex], 'key', key, 'type', _map["dtypes"][1])
             return read_large(_map["larges"][_hex], _map["dtypes"][1])
         else:
-            print('reading from tch', key, _map["shards"], _map["sharding_bits"], _map["dtypes"][0] != 'h')
+            print('reading from tch', key, _map["sharding_bits"], _map["dtypes"][0] != 'h')
             return get_from_tch(key, _map["shards"], _map["sharding_bits"], _map["dtypes"][0] != 'h')
 
     def show_content_raw(
@@ -112,7 +112,7 @@ class WocMapsCopier(WocMapsLocal):
 
         if obj == 'tree':
             _map_obj = self.config['objects']['tree.tch']
-            print('reading from tch', key, _map_obj['shards'], _map_obj['sharding_bits'])
+            print('reading from tch', key, _map_obj['sharding_bits'])
             v = get_from_tch(key, 
                 shards=_map_obj['shards'],
                 sharding_bits=_map_obj['sharding_bits'],
@@ -122,7 +122,7 @@ class WocMapsCopier(WocMapsLocal):
 
         elif obj == 'commit':
             _map_obj = self.config['objects']['commit.tch']
-            print('reading from tch', key, _map_obj['shards'], _map_obj['sharding_bits'])
+            print('reading from tch', key, _map_obj['sharding_bits'])
             v = get_from_tch(key, 
                 shards=_map_obj['shards'],
                 sharding_bits=_map_obj['sharding_bits'],
@@ -132,7 +132,7 @@ class WocMapsCopier(WocMapsLocal):
 
         elif obj == 'blob':
             _map_obj = self.config['objects']['sha1.blob.tch']
-            print('reading from tch', key, _map_obj['shards'], _map_obj['sharding_bits'])
+            print('reading from tch', key, _map_obj['sharding_bits'])
             v = get_from_tch(key, 
                 shards=_map_obj['shards'],
                 sharding_bits=_map_obj['sharding_bits'],
@@ -180,7 +180,7 @@ class WocMapsCopier(WocMapsLocal):
             return write_large(_map["larges"][_hex], key, value, _map["dtypes"][1])
         else:
             # use fnv hash as shading idx if key is not a git sha
-            print('writing to tch', key, _map["shards"], _map["sharding_bits"], _map["dtypes"][0] != 'h')
+            print('writing to tch', key, _map["sharding_bits"], _map["dtypes"][0] != 'h')
             return write_to_tch(key, value, _map["shards"], _map["sharding_bits"], _map["dtypes"][0] != 'h')
         
     def copy_content(self, obj: str, key: Union[bytes, str]):
@@ -189,24 +189,25 @@ class WocMapsCopier(WocMapsLocal):
 
         if obj == 'tree':
             _map_obj = self.config2['objects']['tree.tch']
-            print('writing to tch', key, _map_obj["shards"], _map_obj["sharding_bits"])
-            write_to_tch(key.encode(), value, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=False)
+            print('writing to tch', key, _map_obj["sharding_bits"])
+            write_to_tch(bytes.fromhex(key), value, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=True)
         
         elif obj == 'commit':
             _map_obj = self.config2['objects']['commit.tch']
-            print('writing to tch', key, _map_obj["shards"], _map_obj["sharding_bits"])
-            write_to_tch(key.encode(), value, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=False)
+            print('writing to tch', key ,_map_obj["sharding_bits"])
+            write_to_tch(bytes.fromhex(key), value, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=True)
         
         elif obj == 'blob':
             _map_obj = self.config2['objects']['sha1.blob.tch']
             _idx, _v = value
             offset, length = unber(_idx)
             _idx = ber(0, length)
-            print('writing to tch', key, _map_obj["shards"], _map_obj["sharding_bits"])
-            write_to_tch(key.encode(), _idx, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=False)
+            print('writing to tch', key, _map_obj["sharding_bits"])
+            write_to_tch(bytes.fromhex(key), _idx, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=False)
             _map_obj = self.config2['objects']['blob.bin']
-            print('writing to file', _map_obj['shards'][0], length)
-            with open(_map_obj['shards'][0], "ab") as f:
+            shard = get_shard(bytes.fromhex(key), _map_obj['sharding_bits'], use_fnv_keys=False)
+            print('writing to file', _map_obj['shards'][shard], length)
+            with open(_map_obj['shards'][shard], "ab") as f:
                 f.write(_v)
         
         else:
@@ -214,6 +215,13 @@ class WocMapsCopier(WocMapsLocal):
         
 
 if __name__ == '__main__':
+    import glob
+    import os
+
+    for f in glob.glob('./tests/fixtures/*.tch*') + glob.glob('./tests/fixtures/*.bin'):
+        print('removing', f)
+        os.remove(f)
+
     cp = WocMapsCopier('./wocprofile.json', './tests/test_profile.json')
     cp.copy_values('c2p', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
     cp.copy_values('c2dat', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
