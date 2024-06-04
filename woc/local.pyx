@@ -8,6 +8,7 @@ import json
 import logging
 import time
 from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t
+from threading import Lock
 from typing import Tuple, Dict, Iterable, List, Union, Literal, Optional
 import gzip
 
@@ -17,12 +18,29 @@ try:
 except ImportError or AssertionError:
     raise ImportError('python-lzf is required to decompress LZF-compressed data: `pip install python-lzf`')
 
-from .base import WocMapsBase, WocKeyError, WocObjectsWithContent, WocSupportedProfileVersions
-from .tch cimport get_from_tch, get_shard, fnvhash
+from .base import WocMapsBase, WocObjectsWithContent, WocSupportedProfileVersions
+from .tch cimport TCHashDB
 
 logger = logging.getLogger(__name__)
+    
+### Utility functions ###
 
-cdef unber(bytes buf):
+cpdef uint32_t fnvhash(bytes data):
+    """
+    Returns the 32 bit FNV-1a hash value for the given data.
+    >>> hex(fnvhash('foo'))
+    '0xa9f37ed7'
+    """
+    # PY: 5.8usec Cy: 66.8ns
+    cdef:
+        uint32_t hval = 0x811c9dc5
+        uint8_t b
+    for b in data:  
+        hval ^= b
+        hval *= 0x01000193
+    return hval
+
+cpdef unber(bytes buf):
     r""" Perl BER unpacking.
     BER is a way to pack several variable-length ints into one
     binary string. Here we do the reverse.
@@ -56,7 +74,7 @@ cdef unber(bytes buf):
             acc = 0  
     return res
 
-cdef (int, int) lzf_length(bytes raw_data):
+cpdef (int, int) lzf_length(bytes raw_data):
     r""" Get length of uncompressed data from a header of Compress::LZF
     output. Check Compress::LZF sources for the definition of this bit magic
         (namely, LZF.xs, decompress_sv)
@@ -145,6 +163,140 @@ def decode_str(bytes raw_data):
         _encoding = chardet.detect(raw_data)['encoding']
         return raw_data.decode(_encoding, errors='replace')
 
+
+### TCH helpers ###
+
+# Pool of open TokyoCabinet databases to save few milliseconds on opening
+cdef dict _TCH_POOL = {}  # type: Dict[str, TCHashDB]
+TCH_LOCK = Lock()
+
+cpdef get_tch(char *path):
+    """ Cache Hash() objects """
+    if path in _TCH_POOL:
+        return _TCH_POOL[path]
+    try:
+        TCH_LOCK.acquire()
+        # in multithreading environment this can cause race condition,
+        # so we need a lock
+        if path not in _TCH_POOL:
+            # open database in read-only mode and allow concurrent access
+            _TCH_POOL[path] = TCHashDB(path, ro=True)  
+    finally:
+        TCH_LOCK.release()
+    return _TCH_POOL[path]
+
+cpdef uint8_t get_shard(bytes key, uint8_t sharding_bits, bint use_fnv_keys):
+    """ Get shard id """
+    cdef uint8_t p
+    if use_fnv_keys:
+        p = fnvhash(key)  
+    else:
+        p = key[0]
+    cdef uint8_t prefix = p & (2**sharding_bits - 1)
+    return prefix
+
+cpdef bytes get_from_tch(bytes key, list shards, int sharding_bits, bint use_fnv_keys):
+    # not 100% necessary but there are cases where some tchs are miserably missing
+    _shard = get_shard(key, sharding_bits, use_fnv_keys)
+    _path = shards[_shard]
+    assert _path and os.path.exists(_path), f"shard {_shard} not found at {_path}"
+    return get_tch(
+        shards[get_shard(key, sharding_bits, use_fnv_keys)].encode('utf-8')
+    )[key]
+
+### deserializers ###
+
+def decode_value(
+    value: bytes,
+    out_dtype: str
+):
+    if out_dtype == 'h':  # type: list[str]
+        return [value[i:i + 20].hex() for i in range(0, len(value), 20)]
+    elif out_dtype == 'sh':  # type: tuple[str, str, str]
+        buf0 = value[0:len(value)-21]
+        cmt_sha = value[(len(value)-20):len(value)]
+        (Time, Author) = decode_str(buf0).split(";")
+        return (Time, Author, cmt_sha.hex())  
+    elif out_dtype == 'cs3':  # type: list[tuple[str, str, str]]
+        data = decomp(value)
+        _splited = decode_str(data).split(";")
+        return [
+            (_splited[i],_splited[i+1],_splited[i+2])
+            for i in range(0, len(_splited), 3)
+        ] 
+    elif out_dtype == 'cs':   # type: list[str]
+        data = decomp(value)
+        return [decode_str(v)
+            for v in data.split(b';')
+            if v and v != b'EMPTY'] 
+    elif out_dtype == 's':  # type: list[str]
+        return [decode_str(v)
+            for v in value.split(b';')]
+    elif out_dtype == 'r':  # type: list[str, int]
+        _hex = value[:20].hex()
+        _len = unber(value[20:])[0]
+        return (_hex, _len)
+    elif out_dtype == 'hhwww':
+        raise NotImplemented
+    raise ValueError(f'Unsupported dtype: {out_dtype}')
+
+
+def decode_tree(
+    value: bytes
+) -> List[Tuple[str, str, str]]:
+    """
+    Decode a tree binary object into tuples
+    Reference: https://stackoverflow.com/questions/14790681/
+        mode   (ASCII encoded decimal)
+        SPACE (\0x20)
+        filename
+        NULL (\x00)
+        20-byte binary hash
+    """
+    _out_buf = []
+    _file_buf = []
+    _curr_buf = bytes()
+    
+    # TODO: current impl is not efficient, need to optimize
+    i = 0
+    while i < len(value):
+        if value[i] == 0x20:
+            _file_buf.append(decode_str(_curr_buf))
+            _curr_buf = bytes()
+        elif value[i] == 0x00:
+            _file_buf.append(decode_str(_curr_buf))
+            # take next 20 bytes as a hash
+            _curr_buf = value[i+1:i+21]
+            _file_buf.append(_curr_buf.hex())
+            _out_buf.append(tuple(_file_buf))
+            # clear buffers
+            _file_buf = []
+            _curr_buf = bytes()
+            i += 20
+        else:
+            _curr_buf += bytes([value[i]])
+        i += 1
+
+    return _out_buf
+
+
+def read_large(path: str, dtype: str) -> bytes:
+    """Read a *.large.* and return its content""" 
+    if dtype == 'h':
+        with open(path, 'rb') as f:
+            f.seek(20) # 160 bits of SHA1
+            return f.read()
+    else:
+        # use zlib to decompress
+        with gzip.open(path, 'rb') as f:
+            _uncompressed = f.read()
+            # find first 256 bytes for b'\n', don't scan the whole document
+            _idx = _uncompressed[:256].find(b'\n')
+            if _idx > 0:
+                return _uncompressed[_idx+1:]  # a2f
+            return _uncompressed  # b2tac
+
+
 class WocMapsLocal(WocMapsBase):
     def __init__(self, 
             profile_path: Union[str, Iterable[str], None] = None,
@@ -174,58 +326,6 @@ class WocMapsLocal(WocMapsBase):
         assert self.config["wocSchemaVersion"] in WocSupportedProfileVersions, \
                                     "Unsupported wocprofile version: {}".format(self.config["wocSchemaVersion"])
         assert self.config["maps"], "Run `python3 -m woc.detect` to scan data files and generate wocprofile.json"
-
-    @staticmethod
-    def _read_large(path: str, dtype: str) -> bytes:
-        """Read a *.large.* and return its content""" 
-        if dtype == 'h':
-            with open(path, 'rb') as f:
-                f.seek(20) # 160 bits of SHA1
-                return f.read()
-        else:
-            # use zlib to decompress
-            with gzip.open(path, 'rb') as f:
-                _uncompressed = f.read()
-                # find first 256 bytes for b'\n', don't scan the whole document
-                _idx = _uncompressed[:256].find(b'\n')
-                if _idx > 0:
-                    return _uncompressed[_idx+1:]  # a2f
-                return _uncompressed  # b2tac
-
-    def _decode_value(
-        self,
-        value: bytes,
-        out_dtype: str
-    ):
-        if out_dtype == 'h':  # type: list[str]
-            return [value[i:i + 20].hex() for i in range(0, len(value), 20)]
-        elif out_dtype == 'sh':  # type: tuple[str, str, str]
-            buf0 = value[0:len(value)-21]
-            cmt_sha = value[(len(value)-20):len(value)]
-            (Time, Author) = decode_str(buf0).split(";")
-            return (Time, Author, cmt_sha.hex())  
-        elif out_dtype == 'cs3':  # type: list[tuple[str, str, str]]
-            data = decomp(value)
-            _splited = decode_str(data).split(";")
-            return [
-                (_splited[i],_splited[i+1],_splited[i+2])
-                for i in range(0, len(_splited), 3)
-            ] 
-        elif out_dtype == 'cs':   # type: list[str]
-            data = decomp(value)
-            return [decode_str(v)
-                for v in data.split(b';')
-                if v and v != b'EMPTY'] 
-        elif out_dtype == 's':  # type: list[str]
-            return [decode_str(v)
-                for v in value.split(b';')]
-        elif out_dtype == 'r':  # type: list[str, int]
-            _hex = value[:20].hex()
-            _len = unber(value[20:])[0]
-            return (_hex, _len)
-        elif out_dtype == 'hhwww':
-            raise NotImplemented
-        raise ValueError(f'Unsupported dtype: {out_dtype}')
 
     def get_values(
         self,
@@ -265,7 +365,7 @@ class WocMapsLocal(WocMapsBase):
         decode_dtype = _map["dtypes"][1]
 
         if "larges" in _map and _hex in _map["larges"]:
-            _bytes = self._read_large(_map["larges"][_hex], _map["dtypes"][1])
+            _bytes = read_large(_map["larges"][_hex], _map["dtypes"][1])
             logger.debug(f"read large: {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
 
@@ -278,54 +378,9 @@ class WocMapsLocal(WocMapsBase):
             logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
 
-        _ret = self._decode_value(_bytes, decode_dtype)
+        _ret = decode_value(_bytes, decode_dtype)
         logger.debug(f"decode value: {len(_ret)}items {(time.time_ns() - start_time) / 1e6:.2f}ms")
         return _ret
-
-    @staticmethod
-    def _decode_tree(
-        value: bytes
-    ) -> List[Tuple[str, str, str]]:
-        """
-        Decode a tree binary object into tuples
-        Reference: https://stackoverflow.com/questions/14790681/
-            mode   (ASCII encoded decimal)
-            SPACE (\0x20)
-            filename
-            NULL (\x00)
-            20-byte binary hash
-        """
-        _out_buf = []
-        _file_buf = []
-        _curr_buf = bytes()
-        
-        # TODO: current impl is not efficient, need to optimize
-        i = 0
-        while i < len(value):
-            if value[i] == 0x20:
-                _file_buf.append(decode_str(_curr_buf))
-                _curr_buf = bytes()
-            elif value[i] == 0x00:
-                _file_buf.append(decode_str(_curr_buf))
-                # take next 20 bytes as a hash
-                _curr_buf = value[i+1:i+21]
-                _file_buf.append(_curr_buf.hex())
-                _out_buf.append(tuple(_file_buf))
-                # clear buffers
-                _file_buf = []
-                _curr_buf = bytes()
-                i += 20
-            else:
-                _curr_buf += bytes([value[i]])
-            i += 1
-
-        return _out_buf
-
-    @staticmethod
-    def _read_file_with_offset(file_path, offset, length):
-        with open(file_path, "rb") as f:
-            f.seek(offset)
-            return f.read(length)
 
     def show_content(
         self,
@@ -355,7 +410,7 @@ class WocMapsLocal(WocMapsBase):
             )
             logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
-            _ret = self._decode_tree(decomp_or_raw(v))
+            _ret = decode_tree(decomp_or_raw(v))
             logger.debug(f"decode tree: {len(_ret)}items {(time.time_ns() - start_time) / 1e6:.2f}ms")
             return _ret
 
@@ -382,11 +437,10 @@ class WocMapsLocal(WocMapsBase):
             offset, length = unber(v)
             _map_obj = self.config['objects']['blob.bin']
             shard = get_shard(key, _map_obj['sharding_bits'], use_fnv_keys=False)
-            _out_bin = self._read_file_with_offset(
-                _map_obj['shards'][shard],
-                offset,
-                length
-            )
+
+            with open(_map_obj['shards'][shard], "rb") as f:
+                f.seek(offset)
+                _out_bin = f.read(length)
             logger.debug(f"read blob: {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
 
