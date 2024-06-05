@@ -280,6 +280,49 @@ def decode_tree(
     return _out_buf
 
 
+def parse_commit(cmt: str) -> Dict[str, str]:
+    """
+    Parse commit objects into a dictionary
+    """
+    lines = cmt.split('\n')
+    tree_sha = lines[0][5:]
+
+    if lines[1].startswith('parent'):
+        parent_sha = lines[1][7:]
+    else:
+        # insert a dummy line
+        lines.insert(1, '')
+        parent_sha = ''
+
+    author_idx = lines[2].find('>')
+    author = lines[2][7:author_idx+1]
+    author_time = lines[2][author_idx+2:]
+    author_timestamp = author_time.split(' ')[0]
+    author_timezone = author_time.split(' ')[1]
+
+    committer_idx = lines[3].find('>')
+    committer = lines[3][10:committer_idx+1]
+    committer_time = lines[3][committer_idx+2:]
+    committer_timestamp = committer_time.split(' ')[0]
+    committer_timezone = committer_time.split(' ')[1]
+
+    commit_msg = '\\n'.join(lines[5:])
+    if commit_msg.endswith('\\n'): # strip
+        commit_msg = commit_msg[:-2]
+        
+    return dict(
+        tree=tree_sha,
+        parent=parent_sha,
+        author=author,
+        author_timestamp=author_timestamp,
+        author_timezone=author_timezone,
+        committer=committer,
+        committer_timestamp=committer_timestamp,
+        committer_timezone=committer_timezone,
+        message=commit_msg,
+    )
+
+
 def read_large(path: str, dtype: str) -> bytes:
     """Read a *.large.* and return its content""" 
     if dtype == 'h':
@@ -382,6 +425,26 @@ class WocMapsLocal(WocMapsBase):
         logger.debug(f"decode value: {len(_ret)}items {(time.time_ns() - start_time) / 1e6:.2f}ms")
         return _ret
 
+    def get_pos(
+        self,
+        obj: str,
+        key: bytes,
+    ) -> Tuple[int, int]:
+        """
+        Get offset and length of a stacked binary object, currently only support blob.
+        Move out this part because it's much cheaper than measuring the whole object.
+        """
+        if obj == 'blob':
+            _map_obj = self.config['objects']['sha1.blob.tch']
+            v = get_from_tch(key, 
+                shards=_map_obj['shards'],
+                sharding_bits=_map_obj['sharding_bits'],
+                use_fnv_keys=False
+            )
+            return unber(v)
+        else:
+            raise ValueError(f'Unsupported object type: {obj}, expected blob')
+
     def show_content(
         self,
         obj: str,
@@ -424,17 +487,16 @@ class WocMapsLocal(WocMapsBase):
             logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
             return decode_str(decomp_or_raw(v))
 
+            # # Don't decode commit here to be compatible with Perl API
+            # _ret = decode_commit(decomp_or_raw(v))
+            # logger.debug(f"decode commit: {len(_ret)}items {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            # return _ret
+
         elif obj == 'blob':
-            _map_obj = self.config['objects']['sha1.blob.tch']
-            v = get_from_tch(key, 
-                shards=_map_obj['shards'],
-                sharding_bits=_map_obj['sharding_bits'],
-                use_fnv_keys=False
-            )
-            logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            offset, length = self.get_pos('blob', key)
+            logger.debug(f"get from tch: offset={offset} len={length} {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
 
-            offset, length = unber(v)
             _map_obj = self.config['objects']['blob.bin']
             shard = get_shard(key, _map_obj['sharding_bits'], use_fnv_keys=False)
 
