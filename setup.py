@@ -1,5 +1,3 @@
-# distutils: define_macros=CYTHON_TRACE_NOGIL=1
-
 import os
 from setuptools import setup, Extension, find_packages
 from Cython.Build import cythonize
@@ -45,8 +43,9 @@ ext_modules = [
 
 setup(
     name="python-woc",
-    ext_modules=cythonize(ext_modules, emit_linenums=True,),
+    ext_modules=cythonize(ext_modules, emit_linenums=True),
     packages=PACKAGES,
     package_data={"": ["*.pyx", "*.pxd", "*.pxi"]},
     include_package_data=True,
+    script_args=['build_ext', '--inplace'],
 )

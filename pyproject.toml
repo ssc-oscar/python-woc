@@ -1,15 +1,36 @@
-[build-system]
-requires = ["setuptools>=18.0", "wheel", "Cython"]
+[tool.poetry]
+name = "python-woc"
+version = "0.1.0"
+description = "Python interface for World of Code"
+authors = ["Runzhi He <rzhe@pku.edu.cn>", "Marat <marat@cmu.edu>"]
+license = "GPL-3.0"
+readme = "README.md"
+packages = [
+    { include = "woc" }
+]
+include = [
+    { path = "woc/**/*.so", format = "wheel" },
+    { path = "lib/*", format = "sdist" }
+]
 
-[tool.semantic_release]
-version_variable = ['oscar.pyx:__version__', 'docs/conf.py:release']
-# wheel build is performed by manylinux, so just skip it
-build_command = ''
-# remove_dist deletes all pre-existing files in dist/, including built by manylinux
-remove_dist = false
+[tool.poetry.build]
+script = "setup.py"
+generate-setup-file = false
+
+[tool.poetry.dependencies]
+python = "^3.8"
+python-lzf = "^0.2.4"
+chardet = "^5.2.0"
+
+[tool.poetry.group.dev.dependencies]
+cython = "^0.29.0"
+pytest = "^8.2.2"
+
+[build-system]
+requires = ["poetry-core", "Cython>=0.29.0,<1.0.0", "setuptools>=42"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
-minversion = "6.0"
 addopts = "-ra -q"
 testpaths = [
     "tests",
