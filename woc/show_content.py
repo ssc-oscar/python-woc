@@ -4,7 +4,7 @@
 # @authors: Runzhi He <rzhe@pku.edu.cn>
 # @date: 2024-05-27
 
-from .local import WocMapsLocal
+from .local import WocMapsLocal, parse_commit
 
 def format_tree(tree_objs: list) -> str:
     _out = ''
@@ -22,32 +22,29 @@ def format_commit(sha: str, cmt: str, format: int = 0):
         # mock linux's base64, add newline every 76 characters
         _b64 = '\\n'.join([_b64[i:i+76] for i in range(0, len(_b64), 76)]) + '\\n'
         return sha + ';' + _b64
-
-    lines = cmt.split('\n')
-    tree_sha = lines[0][5:]
-
-    if lines[1].startswith('parent'):
-        parent_sha = lines[1][7:]
-    else:
-        # insert a dummy line
-        lines.insert(1, '')
-        parent_sha = ''
-
-    author_idx = lines[2].find('>')
-    author = lines[2][7:author_idx+1]
-    author_time = lines[2][author_idx+2:]
-    author_timestamp = author_time.split(' ')[0]
-    author_timezone = author_time.split(' ')[1]
-
-    committer_idx = lines[3].find('>')
-    committer = lines[3][10:committer_idx+1]
-    committer_time = lines[3][committer_idx+2:]
-    committer_timestamp = committer_time.split(' ')[0]
-    committer_timezone = committer_time.split(' ')[1]
-
-    commit_msg = '\\n'.join(lines[5:])
-    if commit_msg.endswith('\\n'): # strip
-        commit_msg = commit_msg[:-2]
+    
+    d = parse_commit(cmt)
+    # d = dict(
+    #     tree=tree_sha,
+    #     parent=parent_sha,
+    #     author=author,
+    #     author_timestamp=author_timestamp,
+    #     author_timezone=author_timezone,
+    #     committer=committer,
+    #     committer_timestamp=committer_timestamp,
+    #     committer_timezone=committer_timezone,
+    #     message=commit_msg,
+    # )
+    tree_sha = d['tree']
+    parent_sha = d['parent']
+    author = d['author']
+    author_timestamp = d['author_timestamp']
+    author_timezone = d['author_timezone']
+    committer = d['committer']
+    committer_timestamp = d['committer_timestamp']
+    committer_timezone = d['committer_timezone']
+    commit_msg = d['message']
+    
 
     if format == 0: # commit SHA;tree SHA;parent commit SHA;author;committer;author timestamp;commit timestamp
         return ';'.join([sha, tree_sha, parent_sha, author, committer, author_timestamp, committer_timestamp])
@@ -86,9 +83,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='See the Content of Git Object', usage='echo <key> | %(prog)s type (format)')
     parser.add_argument('type', type=str, help='The type of the object')
     parser.add_argument('format', type=int, help='The format of the object', default=0, nargs='?')
+    parser.add_argument('-p', '--profile', type=str, help='The path to the profile file', default=None)
     args = parser.parse_args()
 
-    woc = WocMapsLocal()
+    woc = WocMapsLocal(args.profile)
     for line in sys.stdin:
         try:
             key = line.strip()
