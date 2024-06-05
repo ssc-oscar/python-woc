@@ -5,33 +5,35 @@ on: [push, pull_request]
 jobs:
   test:
     name: Python ${{ matrix.python-version }} tests
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        python-version: [3.6, 3.8]
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v3
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v1
+      - name: Install Poetry
+        run: |
+          PIPX_BIN_DIR=/usr/local/bin pipx install poetry
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+          cache: poetry
+          cache-dependency-path: poetry.lock
 
-      - name: Cache pip
-        uses: actions/cache@v1
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install dependencies (Python ${{ matrix.python-version }})
+      - name: Set Poetry environment
         run: |
-          python -m pip install --upgrade pip
-          pip install typing cython setuptools>=18.0
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          poetry env use ${{ matrix.python-version }}
 
-      - name: Run tests on Python ${{ matrix.python-version }}
-        run: make test_local
+      - name: Install dependencies
+        run: |
+          poetry install
+
+      - name: Run tests
+        run: |
+          poetry run pytest -v
