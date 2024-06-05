@@ -9,8 +9,6 @@ def db(tmp_path):
     path = tmp_path / "test_db.tch"
     db = TCHashDB(path=bytes(str(path), 'utf-8'))
     yield db
-    db.drop()
-    db.close()
 
 def test_put_and_get(db):
     key = b'key1'
