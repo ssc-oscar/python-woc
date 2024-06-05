@@ -1,4 +1,4 @@
-from typing import Iterable, Union, Tuple, List
+from typing import Iterable, Union, Tuple, List, Dict
 
 from .base import WocMapsBase, WocObjectsWithContent
 
@@ -13,14 +13,14 @@ class WocMapsLocal(WocMapsBase):
         self,
         map_name: str,
         key: Union[bytes, str],
-    ) -> (list[str] | tuple[str, str, str] | list[tuple[str, str, str]]):
+    ) -> Union[List[str], Tuple[str, str, str], List[Tuple[str, str, str]]]:
         ...
 
     def show_content(
         self,
         obj: WocObjectsWithContent,
         key: Union[bytes, str],
-    ) -> (list[tuple[str, str, str]] | str):
+    ) -> Union[List[Tuple[str, str, str]], str]:
         ...
 
 # Make utility functions accessible from Python -> easier testing
@@ -30,3 +30,4 @@ def lzf_length(raw_data: bytes) -> Tuple[int, int]: ...
 def get_tch(path: str): ...
 def get_shard(key: bytes, sharding_bits: int, use_fnv_keys: bool) -> int: ...
 def get_from_tch(key: bytes, shards: List[bytes], sharding_bits: int, use_fnv_keys: bool) -> bytes: ...
+def parse_commit(cmt: str) -> Dict[str, str]: ...
