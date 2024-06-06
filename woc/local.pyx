@@ -8,6 +8,7 @@ import json
 import logging
 import time
 from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t
+from libc.string cimport memchr, strstr, strchr, strlen, strncmp
 from threading import Lock
 from typing import Tuple, Dict, Iterable, List, Union, Literal, Optional
 import gzip
@@ -22,6 +23,9 @@ from .base import WocMapsBase, WocObjectsWithContent, WocSupportedProfileVersion
 from .tch cimport TCHashDB
 
 logger = logging.getLogger(__name__)
+
+cdef extern from 'Python.h':
+    object PyBytes_FromStringAndSize(char *s, Py_ssize_t len)
     
 ### Utility functions ###
 
@@ -154,10 +158,10 @@ def slice20(bytes raw_data):
         return ()
     return tuple(raw_data[i:i + 20] for i in range(0, len(raw_data), 20))
 
-def decode_str(bytes raw_data):
+def decode_str(bytes raw_data, str encoding='utf-8'):
     """ Decode raw_data, detect the encoding if utf-8 fails """
     try:
-        return raw_data.decode('utf-8')
+        return raw_data.decode(encoding)
     except UnicodeDecodeError:
         import chardet  # should be rarely used
         _encoding = chardet.detect(raw_data)['encoding']
@@ -240,88 +244,268 @@ def decode_value(
         raise NotImplemented
     raise ValueError(f'Unsupported dtype: {out_dtype}')
 
-
 def decode_tree(
     value: bytes
 ) -> List[Tuple[str, str, str]]:
     """
     Decode a tree binary object into tuples
+    Python: 4.77 µs, Cython: 280 ns
     Reference: https://stackoverflow.com/questions/14790681/
         mode   (ASCII encoded decimal)
         SPACE (\0x20)
         filename
         NULL (\x00)
         20-byte binary hash
+    >>> decode_tree(b'100644 .gitignore\x00\x8e\x9e\x1f...')
+    [('100644', '.gitignore', '8e9e1...'), ...]
     """
-    _out_buf = []
-    _file_buf = []
-    _curr_buf = bytes()
-    
-    # TODO: current impl is not efficient, need to optimize
-    i = 0
-    while i < len(value):
-        if value[i] == 0x20:
-            _file_buf.append(decode_str(_curr_buf))
-            _curr_buf = bytes()
-        elif value[i] == 0x00:
-            _file_buf.append(decode_str(_curr_buf))
-            # take next 20 bytes as a hash
-            _curr_buf = value[i+1:i+21]
-            _file_buf.append(_curr_buf.hex())
-            _out_buf.append(tuple(_file_buf))
-            # clear buffers
-            _file_buf = []
-            _curr_buf = bytes()
-            i += 20
-        else:
-            _curr_buf += bytes([value[i]])
-        i += 1
+    files = []
 
-    return _out_buf
+    cdef:
+        const char* tree_cstr = value
+        const char* end = tree_cstr + len(value)
+        const char* pos = tree_cstr
+        const char* mode_start
+        const char* filename_start
+        const char* hash_start
+        uint8_t mode_len
+        uint16_t filename_len  # git filenames can be 4096 chars long
 
-
-def parse_commit(cmt: str) -> Dict[str, str]:
-    """
-    Parse commit objects into a dictionary
-    """
-    lines = cmt.split('\n')
-    tree_sha = lines[0][5:]
-
-    if lines[1].startswith('parent'):
-        parent_sha = lines[1][7:]
-    else:
-        # insert a dummy line
-        lines.insert(1, '')
-        parent_sha = ''
-
-    author_idx = lines[2].find('>')
-    author = lines[2][7:author_idx+1]
-    author_time = lines[2][author_idx+2:]
-    author_timestamp = author_time.split(' ')[0]
-    author_timezone = author_time.split(' ')[1]
-
-    committer_idx = lines[3].find('>')
-    committer = lines[3][10:committer_idx+1]
-    committer_time = lines[3][committer_idx+2:]
-    committer_timestamp = committer_time.split(' ')[0]
-    committer_timezone = committer_time.split(' ')[1]
-
-    commit_msg = '\\n'.join(lines[5:])
-    if commit_msg.endswith('\\n'): # strip
-        commit_msg = commit_msg[:-2]
+    while pos < end:
+        mode_start = pos
+        pos = <const char*>memchr(pos, b' ', end - pos)
+        if not pos:
+            raise ValueError('Invalid tree object: missing space after mode')
         
-    return dict(
-        tree=tree_sha,
-        parent=parent_sha,
-        author=author,
-        author_timestamp=author_timestamp,
-        author_timezone=author_timezone,
-        committer=committer,
-        committer_timestamp=committer_timestamp,
-        committer_timezone=committer_timezone,
-        message=commit_msg,
+        mode_len = pos - mode_start
+        pos += 1  # Skip the space
+
+        filename_start = pos
+        pos = <const char*>memchr(pos, b'\x00', end - pos)
+        if not pos:
+            raise ValueError('Invalid tree object: missing null byte after filename')
+
+        filename_len = pos - filename_start
+        pos += 1  # Skip the null byte
+
+        if pos + 20 > end:
+            raise ValueError('Invalid tree object: missing or truncated hash')
+
+        hash_start = pos
+        pos += 20  # Skip the 20-byte hash
+
+        files.append((
+            value[mode_start - tree_cstr:mode_start - tree_cstr + mode_len].decode('ascii'),
+            value[filename_start - tree_cstr:filename_start  - tree_cstr + filename_len].decode('utf-8'),
+            value[hash_start  - tree_cstr :hash_start  - tree_cstr + 20].hex()
+        ))
+
+    return files
+
+# def decode_tree(
+#     value: bytes
+# ) -> List[Tuple[str, str, str]]:
+#     """
+#     Decode a tree binary object into tuples
+#     Reference: https://stackoverflow.com/questions/14790681/
+#         mode   (ASCII encoded decimal)
+#         SPACE (\0x20)
+#         filename
+#         NULL (\x00)
+#         20-byte binary hash
+#     """
+#     _out_buf = []
+#     _file_buf = []
+#     _curr_buf = bytes()
+    
+#     # TODO: current impl is not efficient, need to optimize
+#     i = 0
+#     while i < len(value):
+#         if value[i] == 0x20:
+#             _file_buf.append(decode_str(_curr_buf))
+#             _curr_buf = bytes()
+#         elif value[i] == 0x00:
+#             _file_buf.append(decode_str(_curr_buf))
+#             # take next 20 bytes as a hash
+#             _curr_buf = value[i+1:i+21]
+#             _file_buf.append(_curr_buf.hex())
+#             _out_buf.append(tuple(_file_buf))
+#             # clear buffers
+#             _file_buf = []
+#             _curr_buf = bytes()
+#             i += 20
+#         else:
+#             _curr_buf += bytes([value[i]])
+#         i += 1
+
+#     return _out_buf
+
+cdef const char* strrchr2(const char* s, char c, const char* end):
+    """Like strrchr but with a limit"""
+    cdef const char* p = NULL
+    while s and s < end:
+        if s[0] == c:
+            p = s
+        s += 1
+    return p
+
+def decode_commit(
+    commit_bin: bytes
+) -> Tuple[str, Tuple[str, str, str], Tuple[str, str, str], str]:
+    """
+    Decode git commit objects into tuples
+    Python: 2.35 µs, Cython: 855 ns
+    Reference: https://git-scm.com/book/en/v2/Git-Internals-Git-Objects
+    >>> decode_commit(b'tree f1b66dcca490b5c4455af319bc961a34f69c72c2\\n...')
+    ('f1b66dcca490b5c4455af319bc961a34f69c72c2',
+        ('c19ff598808b181f1ab2383ff0214520cb3ec659',),
+        ('Audris Mockus <audris@utk.edu> 1410029988', '1410029988', '-0400'),
+        ('Audris Mockus <audris@utk.edu>', '1410029988', '-0400'),
+        'News for Sep 5, 2014\n')
+    """
+    cdef:
+        const char* cmt_cstr = commit_bin
+        const char* header
+        const char* full_msg
+        const char* line
+        const char* next_line
+        const char* key
+        const char* value
+        const char* timestamp
+        const char* timezone
+        bint is_reading_pgp = False
+        int header_len
+        int line_len
+    
+    _parent_shas = []
+    _tree = ''
+    _author_bytes = b''
+    _author_timestamp = ''
+    _author_timezone = ''
+    _committer_bytes = b''
+    _committer_timestamp = ''
+    _committer_timezone = ''
+    _encoding = 'utf-8'
+
+    if not cmt_cstr or cmt_cstr[0] == b'\0':
+        raise ValueError('Empty commit object')
+
+    header = cmt_cstr
+    full_msg = strstr(cmt_cstr, b"\n\n")
+    if not full_msg:
+        raise ValueError('Invalid commit object: no \\n\\n')
+
+    header_len = full_msg - header
+    full_msg += 2  # Skip the '\n\n'
+
+    line = header
+    while line < header + header_len:
+        next_line = strchr(line, b'\n')
+        if not next_line:
+            next_line = header + header_len
+        line_len = next_line - line
+
+        if line_len == 0:
+            line = next_line + 1
+            continue
+
+        key = line
+        value = strchr(line, b' ')
+        if not value or value >= next_line:
+            line = next_line + 1
+            continue
+        value += 1
+
+        if strncmp(key, "tree ", 5) == 0:
+            _tree = (value[:line_len - 5]).decode('ascii')
+        elif strncmp(key, "parent ", 7) == 0:
+            _parent_shas.append(value[:line_len - 7].decode('ascii'))
+        elif strncmp(key, "author ", 7) == 0:
+            timezone = strrchr2(value, b' ', next_line)
+            if not timezone:
+                continue
+            timestamp = strrchr2(value, b' ', timezone - 1)
+            if not timestamp:
+                continue
+            _author_bytes = value[:timestamp - value]
+            _author_timestamp = (value[timestamp - value + 1: timezone - value]).decode('ascii')
+            _author_timezone = (value[timezone - value + 1: next_line - value]).decode('ascii')
+        elif strncmp(key, "committer ", 10) == 0:
+            timezone = strrchr2(value, b' ', next_line)
+            if not timezone:
+                continue
+            timestamp = strrchr2(value, b' ', timezone - 1)
+            if not timestamp:
+                continue
+            _committer_bytes = value[:timestamp - value]
+            _committer_timestamp = (value[timestamp - value + 1: timezone - value]).decode('ascii')
+            _committer_timezone = (value[timezone - value + 1: next_line - value]).decode('ascii')
+        elif strncmp(key, "gpgsig", 6) == 0:
+            is_reading_pgp = True
+        elif is_reading_pgp and strncmp(line, "-----END PGP SIGNATURE-----", 27) == 0:
+            is_reading_pgp = False
+        elif strncmp(key, "encoding", 8) == 0:
+            _encoding = value[:line_len - 8].decode('ascii')
+
+        line = next_line + 1
+
+    _author = decode_str(_author_bytes, _encoding)
+    _committer = decode_str(_committer_bytes, _encoding)
+    _message = decode_str(full_msg, _encoding)
+
+    return (
+        _tree,
+        tuple(_parent_shas),
+        (_author, _author_timestamp, _author_timezone),
+        (_committer, _committer_timestamp, _committer_timezone),
+        _message,   
     )
 
+# def decode_commit(cmt: bytes):
+#     """
+#     Decode git commit objects into tuples
+#     """
+#     cmt = decode_str(cmt)
+#     if cmt.strip() == '':
+#         raise ValueError('Empty commit object')
+#     try:
+#         header, full_msg = cmt.split('\n\n', 1)
+#     except ValueError:
+#         raise ValueError('Invalid commit object: no \\n\\n')
+
+#     tree = ''
+#     parent = []
+#     author, author_timestamp, author_timezone = '', '', ''
+#     committer, committer_timestamp, committer_timezone = '', '', ''
+#     encoding = 'utf-8'
+#     # parse the header
+#     _is_reading_pgp = False
+#     for line in header.split('\n'):
+#         line = line.strip()
+#         if line.startswith('tree'):
+#             tree = line[5:]
+#         elif line.startswith('parent'):  # merge commits have multiple parents
+#             parent.append(line[7:])
+#         elif line.startswith('author'):
+#             # res['author'], res['author_timestamp'], res['author_timezone'] = line[7:].rsplit(' ', 2)
+#             author, timestamp, timezone = line[7:].rsplit(' ', 2)
+#         elif line.startswith('committer'):
+#             # res['committer'], res['committer_timestamp'], res['committer_timezone'] = line[10:].rsplit(' ', 2)
+#             committer, timestamp, timezone = line[10:].rsplit(' ', 2)
+#         elif line.startswith('gpgsig'):
+#             _is_reading_pgp = True
+#         elif _is_reading_pgp and line.strip() == '-----END PGP SIGNATURE-----':
+#             _is_reading_pgp = False
+#         elif line.startswith('encoding'):
+#             encoding = line[8:]
+        
+#     return (
+#         tree,
+#         tuple(parent),
+#         (author, author_timestamp, author_timezone),
+#         (committer, committer_timestamp, committer_timezone),
+#         full_msg,  
+#     )
 
 def read_large(path: str, dtype: str) -> bytes:
     """Read a *.large.* and return its content""" 
@@ -370,16 +554,21 @@ class WocMapsLocal(WocMapsBase):
                                     "Unsupported wocprofile version: {}".format(self.config["wocSchemaVersion"])
         assert self.config["maps"], "Run `python3 -m woc.detect` to scan data files and generate wocprofile.json"
 
-    def get_values(
-        self,
-        map_name: str,
-        key: Union[bytes, str],
-    ):
-        """Eqivalent to getValues in WoC Perl API
-        >>> get_values('P2c', 'user2589_minicms')  # doctest: +SKIP
-        ...
+    def _get_tch_bytes(
+        self, map_name, key
+    ) -> Tuple[bytes, str]:
         """
+        Get value (in bytes) from tch maps, return bytes and dtype
+        """
+        # translate obj_name to map_name
+        if map_name == 'tree':
+            map_name = 'tree.tch'
+        elif map_name == 'commit':
+            map_name = 'commit.tch'
+        elif map_name == 'blob':
+            map_name = 'sha1.blob.tch'
 
+        # find dtype object
         if map_name in self.config["maps"]:
             _map = self.config["maps"][map_name][0]
         elif map_name in self.config["objects"]:
@@ -387,11 +576,14 @@ class WocMapsLocal(WocMapsBase):
         else:
             raise KeyError(f'Invalid map name: {map_name}, '
                 f'expect one of {", ".join(self.config["maps"].keys())}')
+        
+        in_dtype = _map["dtypes"][0] if "dtypes" in _map else "h"
+        out_dtype = _map["dtypes"][1] if "dtypes" in _map else "c?"  # c? means maybe compressed
 
         start_time = time.time_ns()
-        logger.debug(f"get_values: {map_name} {key}")
+        logger.debug(f"get from tch: {map_name} {key}")
     
-        if _map["dtypes"][0] == 'h':
+        if in_dtype == 'h':
             if isinstance(key, str):
                 _hex = key
                 key = bytes.fromhex(key)
@@ -404,97 +596,135 @@ class WocMapsLocal(WocMapsBase):
 
         logger.debug(f"hash: {(time.time_ns() - start_time) / 1e6:.2f}ms")
         start_time = time.time_ns()
-        
-        decode_dtype = _map["dtypes"][1]
 
         if "larges" in _map and _hex in _map["larges"]:
-            _bytes = read_large(_map["larges"][_hex], _map["dtypes"][1])
+            _bytes = read_large(_map["larges"][_hex], out_dtype)
             logger.debug(f"read large: {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
 
             # compress string data is not compressed in larges
-            if decode_dtype == 'cs':
-                decode_dtype = 's'
+            if out_dtype == 'cs':
+                out_dtype = 's'
         else:
             # use fnv hash as shading idx if key is not a git sha
-            _bytes = get_from_tch(key, _map["shards"], _map["sharding_bits"], _map["dtypes"][0] != 'h')
+            _bytes = get_from_tch(key, _map["shards"], _map["sharding_bits"], in_dtype != 'h')
             logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
-            start_time = time.time_ns()
 
-        _ret = decode_value(_bytes, decode_dtype)
-        logger.debug(f"decode value: {len(_ret)}items {(time.time_ns() - start_time) / 1e6:.2f}ms")
-        return _ret
+        return _bytes, out_dtype
 
-    def get_pos(
+    def get_values(
+        self,
+        map_name: str,
+        key: Union[bytes, str],
+    ):
+        """Eqivalent to getValues in WoC Perl API
+        >>> self.get_values('P2c', 'user2589_minicms')
+        ['05cf84081b63cda822ee407e688269b494a642de', ...]
+        """
+        _bytes, decode_dtype = self._get_tch_bytes(map_name, key)
+        start_time = time.time_ns()
+        _decoded = decode_value(_bytes, decode_dtype)
+        logger.debug(f"decode: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+        return _decoded
+
+    def _get_pos(
         self,
         obj: str,
-        key: bytes,
+        key: Union[bytes, str]
     ) -> Tuple[int, int]:
         """
         Get offset and length of a stacked binary object, currently only support blob.
-        Move out this part because it's much cheaper than measuring the whole object.
+        Move out this part because it's much cheaper than decode the content.
+        >>> self._get_pos('blob', bytes.fromhex('7a374e58c5b9dec5f7508391246c48b73c40d200'))
+        (0, 123)
         """
         if obj == 'blob':
-            _map_obj = self.config['objects']['sha1.blob.tch']
-            v = get_from_tch(key, 
-                shards=_map_obj['shards'],
-                sharding_bits=_map_obj['sharding_bits'],
-                use_fnv_keys=False
-            )
-            return unber(v)
+            r_res = unber(self._get_tch_bytes('blob', key)[0])
+            assert len(r_res) == 2, f"Invalid (offset, length) pair: {r_res}"
+            return r_res[0], r_res[1]
         else:
             raise ValueError(f'Unsupported object type: {obj}, expected blob')
 
+    # def _show_content_bytes(
+    #     self,
+    #     obj_name: str,
+    #     key: Union[bytes, str],
+    # ):
+    #     start_time = time.time_ns()
+    #     logger.debug(f"show_content: {obj_name} {key}")
+
+    #     if isinstance(key, str):
+    #         key = bytes.fromhex(key)
+
+    #     logger.debug(f"hash: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+    #     start_time = time.time_ns()
+
+    #     if obj_name == 'tree':
+    #         _map_obj = self.config['objects']['tree.tch']
+    #         v = get_from_tch(key, 
+    #             shards=_map_obj['shards'],
+    #             sharding_bits=_map_obj['sharding_bits'],
+    #             use_fnv_keys=False
+    #         )
+    #         logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+    #         return decomp_or_raw(v)
+
+    #     elif obj_name == 'commit':
+    #         _map_obj = self.config['objects']['commit.tch']
+    #         v = get_from_tch(key, 
+    #             shards=_map_obj['shards'],
+    #             sharding_bits=_map_obj['sharding_bits'],
+    #             use_fnv_keys=False
+    #         )
+    #         logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+    #         return decomp_or_raw(v)
+
+    #     elif obj_name == 'blob':
+    #         offset, length = self._get_pos('blob', key)
+    #         logger.debug(f"get from tch: offset={offset} len={length} {(time.time_ns() - start_time) / 1e6:.2f}ms")
+    #         start_time = time.time_ns()
+
+    #         _map_obj = self.config['objects']['blob.bin']
+    #         shard = get_shard(key, _map_obj['sharding_bits'], use_fnv_keys=False)
+
+    #         with open(_map_obj['shards'][shard], "rb") as f:
+    #             f.seek(offset)
+    #             _out_bin = f.read(length)
+    #         logger.debug(f"read blob: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+    #         start_time = time.time_ns()
+
+    #         return decomp_or_raw(_out_bin)
+
+    #     else:
+    #         raise ValueError(f'Unsupported object type: {obj_name}')
+
     def show_content(
         self,
-        obj: str,
+        obj_name: str,
         key: Union[bytes, str],
     ):
-        """Eqivalent to showCnt in WoC perl API
-        >>> show_content('tree', '7a374e58c5b9dec5f7508391246c48b73c40d200')  # doctest: +SKIP
-        ...
+        """
+        Eqivalent to showCnt in WoC perl API
+        >>> self.show_content('tree', '7a374e58c5b9dec5f7508391246c48b73c40d200')
+        [('100644', '.gitignore', '8e9e1...'), ...]
         """
         start_time = time.time_ns()
-        logger.debug(f"show_content: {obj} {key}")
 
-
-        if isinstance(key, str):
-            key = bytes.fromhex(key)
-
-        logger.debug(f"hash: {(time.time_ns() - start_time) / 1e6:.2f}ms")
-        start_time = time.time_ns()
-
-        if obj == 'tree':
-            _map_obj = self.config['objects']['tree.tch']
-            v = get_from_tch(key, 
-                shards=_map_obj['shards'],
-                sharding_bits=_map_obj['sharding_bits'],
-                use_fnv_keys=False
-            )
-            logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
-            start_time = time.time_ns()
-            _ret = decode_tree(decomp_or_raw(v))
+        if obj_name == 'tree':
+            _ret = decode_tree(decomp_or_raw(self._get_tch_bytes(obj_name, key)[0]))
             logger.debug(f"decode tree: {len(_ret)}items {(time.time_ns() - start_time) / 1e6:.2f}ms")
             return _ret
 
-        elif obj == 'commit':
-            _map_obj = self.config['objects']['commit.tch']
-            v = get_from_tch(key, 
-                shards=_map_obj['shards'],
-                sharding_bits=_map_obj['sharding_bits'],
-                use_fnv_keys=False
-            )
-            logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
-            return decode_str(decomp_or_raw(v))
+        elif obj_name == 'commit':
+            _ret = decode_commit(decomp_or_raw(self._get_tch_bytes(obj_name, key)[0]))
+            logger.debug(f"decode commit: {len(_ret)}items {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            return _ret
 
-            # # Don't decode commit here to be compatible with Perl API
-            # _ret = decode_commit(decomp_or_raw(v))
-            # logger.debug(f"decode commit: {len(_ret)}items {(time.time_ns() - start_time) / 1e6:.2f}ms")
-            # return _ret
+        elif obj_name == 'blob':
+            key = bytes.fromhex(key) if isinstance(key, str) else key
 
-        elif obj == 'blob':
-            offset, length = self.get_pos('blob', key)
-            logger.debug(f"get from tch: offset={offset} len={length} {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            offset, length = self._get_pos('blob', key)
+            logger.debug(f"pos: offset={offset} len={length} {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
 
             _map_obj = self.config['objects']['blob.bin']
@@ -506,15 +736,13 @@ class WocMapsLocal(WocMapsBase):
             logger.debug(f"read blob: {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
 
-            _ret = decode_str(decomp_or_raw(_out_bin))
-            logger.debug(f"decode blob: len={len(_ret)} {(time.time_ns() - start_time) / 1e6:.2f}ms")
-            return _ret
+            return decode_str(decomp_or_raw(_out_bin))
 
-        elif obj == 'tkns':
+        elif obj_name == 'tkns':
             raise NotImplemented
-        elif obj == 'tag':
+        elif obj_name == 'tag':
             raise NotImplemented
-        elif obj == 'bdiff':
+        elif obj_name == 'bdiff':
             raise NotImplemented
         else:
-            raise ValueError(f'Unsupported object type: {obj}, expected one of tree, blob, commit, tkns, tag, bdiff')
+            raise ValueError(f'Unsupported object type: {obj_name}, expected one of tree, blob, commit, tkns, tag, bdiff')

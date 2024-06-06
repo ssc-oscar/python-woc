@@ -4,7 +4,7 @@
 # @authors: Runzhi He <rzhe@pku.edu.cn>
 # @date: 2024-05-27
 
-from .local import WocMapsLocal, parse_commit
+from .local import WocMapsLocal, decode_commit, decode_str, decomp_or_raw
 
 def format_tree(tree_objs: list) -> str:
     _out = ''
@@ -12,38 +12,26 @@ def format_tree(tree_objs: list) -> str:
         _out += f'{line[0]};{line[2]};{line[1]}\n'
     return _out
 
-def format_commit(sha: str, cmt: str, format: int = 0): 
+def format_commit(sha: str, cmt_bin: bytes, format: int = 0): 
     if format == 3: # raw
+        cmt = decode_str(cmt_bin)
         return cmt
     
     if format == 7: # commit sha; base64(raw)
         import base64
-        _b64 = base64.b64encode(cmt.encode()).decode()
+        _b64 = base64.b64encode(cmt_bin).decode()
         # mock linux's base64, add newline every 76 characters
         _b64 = '\\n'.join([_b64[i:i+76] for i in range(0, len(_b64), 76)]) + '\\n'
         return sha + ';' + _b64
     
-    d = parse_commit(cmt)
-    # d = dict(
-    #     tree=tree_sha,
-    #     parent=parent_sha,
-    #     author=author,
-    #     author_timestamp=author_timestamp,
-    #     author_timezone=author_timezone,
-    #     committer=committer,
-    #     committer_timestamp=committer_timestamp,
-    #     committer_timezone=committer_timezone,
-    #     message=commit_msg,
-    # )
-    tree_sha = d['tree']
-    parent_sha = d['parent']
-    author = d['author']
-    author_timestamp = d['author_timestamp']
-    author_timezone = d['author_timezone']
-    committer = d['committer']
-    committer_timestamp = d['committer_timestamp']
-    committer_timezone = d['committer_timezone']
-    commit_msg = d['message']
+    (
+        tree_sha,
+        parents,
+        (author, author_timestamp, author_timezone),
+        (committer, committer_timestamp, committer_timezone),
+        commit_msg,  
+    ) = decode_commit(cmt_bin)
+    parent_sha = parents[0]  # only the first parent
     
 
     if format == 0: # commit SHA;tree SHA;parent commit SHA;author;committer;author timestamp;commit timestamp
@@ -90,12 +78,14 @@ if __name__ == '__main__':
     for line in sys.stdin:
         try:
             key = line.strip()
-            obj = woc.show_content(args.type, key)
             if args.type == 'commit':
-                print(format_commit(key, obj, args.format))
+                obj_bin = decomp_or_raw(woc._get_tch_bytes(args.type, key)[0])
+                print(format_commit(key, obj_bin, args.format))
             elif args.type == 'tree':
+                obj = woc.show_content(args.type, key)
                 print(format_tree(obj))
             elif args.type == 'blob':
+                obj = woc.show_content(args.type, key)
                 print(obj)
             else:
                 raise ValueError(f'Invalid object type {args.type}')

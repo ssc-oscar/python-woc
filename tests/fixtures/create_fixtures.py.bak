@@ -74,9 +74,86 @@ class WocMapsCopier(WocMapsLocal):
         with open(config2) as f:
             self.config2 = json.load(f)
 
+    def get_values_raw(self, map_name, key):
+        if map_name in self.config["maps"]:
+            _map = self.config["maps"][map_name][0]
+        elif map_name in self.config["objects"]:
+            _map = self.config["objects"][map_name]
+        else:
+            raise KeyError(f'Invalid map name: {map_name}, '
+                f'expect one of {", ".join(self.config["maps"].keys())}')
+
+        if _map["dtypes"][0] == 'h':
+            if isinstance(key, str):
+                _hex = key
+                key = bytes.fromhex(key)
+            else:
+                _hex = bytes(key).hex()
+        else:
+            assert isinstance(key, str), "key must be a string for non-hash keys"
+            _hex = hex(fnvhash(key.encode('utf-8')))[2:]
+            key = key.encode('utf-8')
+
+        if "larges" in _map and _hex in _map["larges"]:
+            print('reading large', _map["larges"][_hex], 'key', key, 'type', _map["dtypes"][1])
+            return read_large(_map["larges"][_hex], _map["dtypes"][1])
+        else:
+            print('reading from tch', key, _map["sharding_bits"], _map["dtypes"][0] != 'h')
+            return get_from_tch(key, _map["shards"], _map["sharding_bits"], _map["dtypes"][0] != 'h')
+
+    def show_content_raw(
+        self,
+        obj: str,
+        key: Union[bytes, str],
+    ):
+        if isinstance(key, str):
+            key = bytes.fromhex(key)
+
+        if obj == 'tree':
+            _map_obj = self.config['objects']['tree.tch']
+            print('reading from tch', key, _map_obj['sharding_bits'])
+            v = get_from_tch(key, 
+                shards=_map_obj['shards'],
+                sharding_bits=_map_obj['sharding_bits'],
+                use_fnv_keys=False
+            )
+            return v
+
+        elif obj == 'commit':
+            _map_obj = self.config['objects']['commit.tch']
+            print('reading from tch', key, _map_obj['sharding_bits'])
+            v = get_from_tch(key, 
+                shards=_map_obj['shards'],
+                sharding_bits=_map_obj['sharding_bits'],
+                use_fnv_keys=False
+            )
+            return v
+
+        elif obj == 'blob':
+            _map_obj = self.config['objects']['sha1.blob.tch']
+            print('reading from tch', key, _map_obj['sharding_bits'])
+            v = get_from_tch(key, 
+                shards=_map_obj['shards'],
+                sharding_bits=_map_obj['sharding_bits'],
+                use_fnv_keys=False
+            )
+
+            offset, length = unber(v)
+            print('reading from blob', _map_obj['shards'][0], offset, length)
+            _map_obj = self.config['objects']['blob.bin']
+            shard = get_shard(key, _map_obj['sharding_bits'], use_fnv_keys=False)
+            with open(_map_obj['shards'][shard], "rb") as f:
+                f.seek(offset)
+                _out_bin = f.read(length)
+            return (v, _out_bin)
+        
+        else:
+            raise ValueError(f'Unsupported object type: {obj}, expected one of tree, blob, commit')
+        
+
     def copy_values(self, map_name, key):
         """One large file can only contain one record"""
-        value, _ = self._get_tch_bytes(map_name, key)
+        value = self.get_values_raw(map_name, key)
 
         if map_name in self.config2["maps"]:
             _map = self.config2["maps"][map_name][0]
@@ -107,7 +184,7 @@ class WocMapsCopier(WocMapsLocal):
         
     def copy_content(self, obj: str, key: Union[bytes, str]):
         """One blob shard can only contain one record"""
-        value, _ = self._get_tch_bytes(obj, key)
+        value = self.show_content_raw(obj, key)
 
         if obj == 'tree':
             _map_obj = self.config2['objects']['tree.tch']
@@ -120,22 +197,14 @@ class WocMapsCopier(WocMapsLocal):
             write_to_tch(bytes.fromhex(key), value, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=True)
         
         elif obj == 'blob':
-            # read blob
-            key = bytes.fromhex(key) if isinstance(key, str) else key
-            offset, length = self._get_pos('blob', key)
-            _map_obj = self.config['objects']['blob.bin']
-            shard = get_shard(key, _map_obj['sharding_bits'], use_fnv_keys=False)
-            with open(_map_obj['shards'][shard], "rb") as f:
-                f.seek(offset)
-                _v = f.read(length)
-            # write tch
             _map_obj = self.config2['objects']['sha1.blob.tch']
+            _idx, _v = value
+            offset, length = unber(_idx)
             _idx = ber(0, length)
             print('writing to tch', key, _map_obj["sharding_bits"])
-            write_to_tch(key, _idx, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=False)
-            # write blob
+            write_to_tch(bytes.fromhex(key), _idx, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=False)
             _map_obj = self.config2['objects']['blob.bin']
-            shard = get_shard(key, _map_obj['sharding_bits'], use_fnv_keys=False)
+            shard = get_shard(bytes.fromhex(key), _map_obj['sharding_bits'], use_fnv_keys=False)
             print('writing to file', _map_obj['shards'][shard], length)
             with open(_map_obj['shards'][shard], "ab") as f:
                 f.write(_v)

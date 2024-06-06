@@ -80,7 +80,7 @@ def test_tree(woc):
 
 def test_commit(woc):
     res = woc.show_content('commit', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
-    assert len(res) == 222 
+    assert res[-1] == 'News for Sep 5'
 
 def test_blob_1(woc):
     res = woc.show_content('blob', '05fe634ca4c8386349ac519f899145c75fff4169')

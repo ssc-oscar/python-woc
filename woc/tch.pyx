@@ -53,7 +53,7 @@ cdef class TCHashDB:
             raise MemoryError()
         cdef bint result = tchdbopen(self._db, path, mode)
         if not result:
-            raise IOError(f'Failed to open "{self.filename.decode("latin1")}": ' + self._error())
+            raise IOError(f'Failed to open {self.filename.decode("latin1")}: ' + self._error())
 
     def _error(self):
         cdef int code = tchdbecode(self._db)
@@ -67,7 +67,7 @@ cdef class TCHashDB:
             int sp
             bytes key
         if not result:
-            raise IOError(f'Failed to iterate "{self.filename.decode("latin1")}": ' + self._error())
+            raise IOError(f'Failed to iterate {self.filename.decode("latin1")}: ' + self._error())
         while True:
             buf = <char *>tchdbiternext(self._db, &sp)
             if buf is NULL:
@@ -84,7 +84,7 @@ cdef class TCHashDB:
             int ksize=len(key)
         buf = <char *>tchdbget(self._db, k, ksize, &sp)
         if buf is NULL:
-            raise KeyError(f'Key "{key.decode("latin1")}" not found in "{self.filename.decode("latin1")}"')
+            raise KeyError(f'Key {key.hex()} not found in {self.filename.decode("latin1")}')
         cdef bytes value = PyBytes_FromStringAndSize(buf, sp)  
         free(buf)
         return value
@@ -98,7 +98,7 @@ cdef class TCHashDB:
             bint result
         result = tchdbput(self._db, k, ksize, v, vsize)
         if not result:
-            raise IOError(f'Failed to put "{key.decode("latin1")}" in "{self.filename.decode("latin1")}": ' + self._error())
+            raise IOError(f'Failed to put {key.hex()} in {self.filename.decode("latin1")}: ' + self._error())
 
     cpdef void delete(self, bytes key) except *:
         cdef:
@@ -107,19 +107,19 @@ cdef class TCHashDB:
             bint result
         result = tchdbout(self._db, k, ksize)
         if not result:
-            raise IOError(f'Failed to delete "{key.decode("latin1")}" in "{self.filename.decode("latin1")}": ' + self._error())
+            raise IOError(f'Failed to delete {key.hex()} in {self.filename.decode("latin1")}: ' + self._error())
 
     cpdef void drop(self) except *:
         cdef:
             bint result
         result = tchdbvanish(self._db)
         if not result:
-            raise IOError(f'Failed to drop all records in "{self.filename.decode("latin1")}": ' + self._error())
+            raise IOError(f'Failed to drop all records in {self.filename.decode("latin1")}: ' + self._error())
 
     cpdef void close(self) except *:
         cdef bint result = tchdbclose(self._db)
         if not result:
-            raise IOError(f'Failed to close "{self.filename.decode("latin1")}": ' + self._error())
+            raise IOError(f'Failed to close {self.filename.decode("latin1")}: ' + self._error())
 
     def __getitem__(self, bytes key):
         return self.get(key)
