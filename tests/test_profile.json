@@ -82,6 +82,21 @@
           ]
         }
       ],
+      "c2ta": [
+        {
+          "version": "R",
+          "sharding_bits": 1,
+          "shards": [
+            "./tests/fixtures/c2taFullR.0.tch",
+            "./tests/fixtures/c2taFullR.1.tch"
+          ],
+          "larges": {},
+          "dtypes": [
+            "h",
+            "s"
+          ]
+        }
+      ],
       "b2tac": [
         {
           "version": "U",

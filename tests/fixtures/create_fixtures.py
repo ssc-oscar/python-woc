@@ -155,6 +155,7 @@ if __name__ == '__main__':
     cp = WocMapsCopier('./wocprofile.json', './tests/test_profile.json')
     cp.copy_values('c2p', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
     cp.copy_values('c2dat', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
+    cp.copy_values('c2ta', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
     cp.copy_values('b2tac', '05fe634ca4c8386349ac519f899145c75fff4169')
     cp.copy_values('p2a', 'ArtiiQ_PocketMine-MP')
     cp.copy_values('b2c', '05fe634ca4c8386349ac519f899145c75fff4169')
