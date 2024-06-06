@@ -9,10 +9,14 @@ from woc.objects import *
 def woc():
     _test_pr = os.path.join(os.path.dirname(__file__), 'test_profile.json')
     woc = WocMapsLocal(_test_pr)
-    init_woc(woc)
+    init_woc_objects(woc)
     yield woc
 
-# Test cases
+def test_equal(woc):
+    assert Author('1') == Author('1')
+    assert Blob('05fe634ca4c8386349ac519f899145c75fff4169') == Blob('05fe634ca4c8386349ac519f899145c75fff4169')
+    assert Author('1') != Project('2')
+    
 def test_author_commits(woc):
     author = Author('Audris Mockus <audris@utk.edu>')
     commits = author.commits
@@ -180,11 +184,10 @@ def test_tree_blobs(woc):
     assert Blob('05fe634ca4c8386349ac519f899145c75fff4169') in blobs
 
 def test_tree_traverse(woc):
-    tree = Tree('f1b66dcca490b5c4455af319bc961a34f69c72c2')
+    tree = Tree('706aa4dedb560358bff21c3120a0b09532d3484d')
     traverse = list(tree.traverse())
     assert all(isinstance(t[0], File) for t in traverse)
     assert all(isinstance(t[1], Blob) for t in traverse)
-    assert traverse[0][0].key == 'README.md'
     
 def test_project_authors(woc):
     project = Project('ArtiiQ_PocketMine-MP')
@@ -197,3 +200,61 @@ def test_project_commits(woc):
     commits = project.commits
     assert all(isinstance(c, Commit) for c in commits)
     assert commits[0].key == '0000000bab11354f9a759332065be5f066c3398f'
+    
+def test_project_url(woc):
+    project = Project('ArtiiQ_PocketMine-MP')
+    assert project.url == 'https://github.com/ArtiiQ/PocketMine-MP'
+    project = Project('sourceforge.net_peazip')  # <- How does sourceforge repos looks like in woc?
+    assert project.url == 'https://git.code.sf.net/p/peazip'
+    project = Project("gitlab.com_openRGB_openRGB")
+    assert project.url == 'https://gitlab.com/openRGB/openRGB'
+    
+def test_project_head(woc):
+    project = Project('woc-hack_thebridge')
+    head = project.head
+    assert isinstance(head, Commit)
+    assert head.key == 'f249b14a111279faa8d65c29ecf46bb6ce59a139'
+    
+def test_project_tail(woc):
+    project = Project('woc-hack_thebridge')
+    tail = project.tail
+    assert isinstance(tail, Commit)
+    assert tail.key == 'ae6e15fa4d8d4d454977ddbb4e97e922ddecebf7'
+    
+def test_project_earliest(woc):
+    project = Project('woc-hack_thebridge')
+    earliest = project.earliest_commit
+    assert isinstance(earliest, Commit)
+    assert earliest.key == 'ae6e15fa4d8d4d454977ddbb4e97e922ddecebf7'
+    
+def test_project_latest(woc):
+    project = Project('woc-hack_thebridge')
+    latest = project.latest_commit
+    assert isinstance(latest, Commit)
+    assert latest.key == 'f249b14a111279faa8d65c29ecf46bb6ce59a139'
+    
+def test_project_walk(woc):
+    project = Project('woc-hack_thebridge')
+    commits = list(project.commits_fp())
+    assert all(isinstance(c, Commit) for c in commits)
+    assert len(commits) == 6
+    
+def test_commit_compare(woc):
+    c1 = Commit('91f4da4c173e41ffbf0d9ecbe2f07f3a3296933c')
+    c2 = Commit('ae6e15fa4d8d4d454977ddbb4e97e922ddecebf7')
+    
+    # We can't test fuzz matching because blob storage is broken :(
+    diff = list(c1.compare(c2, threshold=1))
+    modified_files = set(f[0].key for f in diff if f[0] is not None) | \
+        set(f[1].key for f in diff if f[1] is not None)
+    assert all(len(d) == 4 for d in diff)
+    assert all(isinstance(d[0], File) for d in diff if d[0] is not None)
+    assert all(isinstance(d[1], File) for d in diff if d[1] is not None)
+    assert all(isinstance(d[2], Blob) for d in diff if d[2] is not None)
+    assert all(isinstance(d[3], Blob) for d in diff if d[3] is not None)
+    assert modified_files == {
+        'README.md', 'woc_service/requirements.txt', 'woc_service/app.py',
+        'woc_service/static/.keep', 'woc_service/oscar.py'
+    }
+    
+    

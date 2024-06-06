@@ -1,16 +1,22 @@
 import re
-from typing import Union, Optional, List, Tuple, Set, Generator
+import warnings
+import difflib
+from typing import Union, Optional, List, Tuple, Set, Generator, Dict
 from functools import cached_property, lru_cache
 from datetime import datetime, timezone, timedelta
+from logging import getLogger
 
 from .base import WocMapsBase
 from .local import fnvhash
 
 _global_woc: Optional[WocMapsBase] = None
+logger = getLogger(__name__)
+DAY_Z = datetime.fromtimestamp(0, tz=None)
 
-def init_woc(woc: WocMapsBase):
+def init_woc_objects(woc: WocMapsBase):
     global _global_woc
     _global_woc = woc
+
 
 @lru_cache(maxsize=None)
 def parse_timezone_offset(offset_str):
@@ -31,6 +37,7 @@ def parse_timezone_offset(offset_str):
     
 
 class _WocObject:
+    ident: str  # Identifier of the object
     woc: WocMapsBase  # WocMap instance
     key: str # Key of the object
     
@@ -41,7 +48,8 @@ class _WocObject:
         **kwargs,
     ):
         self.woc = woc or _global_woc
-        assert self.woc is not None, "WocMaps not initialized: call init_woc() or supply a woc argument"
+        assert self.woc is not None, \
+        "WocMaps not initialized: call init_woc_objects() or supply a woc keyword argument"
         
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.key})"
@@ -54,10 +62,11 @@ class _WocObject:
             return False
         return self.key == value.key
     
+    @property
     def hash(self) -> str:
         return hex(hash(self))[2:]
     
-    def get_list_values(self, map_name: str):
+    def _get_list_values(self, map_name: str):
         try:
             return self.woc.get_values(map_name, self.key)
         except KeyError:
@@ -85,6 +94,7 @@ class _GitObject(_WocObject):
     def __hash__(self):
         return int(self.key, 16)
     
+    @property
     def hash(self) -> str:
         return self.key
 
@@ -106,6 +116,7 @@ class _NamedObject(_WocObject):
         
         
 class Author(_NamedObject):
+    ident = 'a'
     @cached_property
     def _username_email(self) -> Tuple[str, str]:
         _splited = self.key.split(' <', 1)
@@ -123,26 +134,28 @@ class Author(_NamedObject):
     
     @cached_property
     def blobs(self) -> 'List[Blob]':
-        return [Blob(b) for b in self.get_list_values('a2b')]
+        return [Blob(b) for b in self._get_list_values('a2b')]
     
     @cached_property
     def commits(self) -> 'List[Commit]':
-        return [Commit(c) for c in self.get_list_values('a2c')]
+        return [Commit(c) for c in self._get_list_values('a2c')]
     
     @cached_property
     def files(self) -> 'List[File]':
-        return [File(f) for f in self.get_list_values('a2f')]
+        return [File(f) for f in self._get_list_values('a2f')]
     
     @cached_property
     def projects(self) -> 'List[Project]':
-        return [Project(p) for p in self.get_list_values('a2p')]
+        return [Project(p) for p in self._get_list_values('a2p')]
 
 
 class UniqueAuthor(Author):
+    ident = 'A'
     pass
 
 
 class Blob(_GitObject):
+    ident = 'b'
     @cached_property
     def _pos(self) -> Tuple[int, int]:
         return self.woc.get_pos('blob', self.key)
@@ -150,9 +163,12 @@ class Blob(_GitObject):
     def __len__(self) -> int:
         return self._pos[1]
     
+    def __str__(self) -> str:
+        return self.data
+    
     @cached_property
     def commits(self) -> 'List[Commit]':
-        return [Commit(sha) for sha in self.get_list_values('b2c')]
+        return [Commit(sha) for sha in self._get_list_values('b2c')]
     
     @cached_property
     def first_author(self) -> 'Tuple[datetime, Author, Commit]':
@@ -169,19 +185,20 @@ class Blob(_GitObject):
     
     @cached_property
     def time_author_commits(self) -> 'List[Tuple[datetime, Author, Commit]]':
-        _out = self.get_list_values('b2tac')
+        _out = self._get_list_values('b2tac')
         return [(datetime.fromtimestamp(int(d[0])), Author(d[1]), Commit(d[2])) for d in _out]
     
     @cached_property
     def files(self) -> 'List[File]':
-        return [File(f) for f in self.get_list_values('b2f')]
+        return [File(f) for f in self._get_list_values('b2f')]
     
     @cached_property
-    def projects_unique(self) -> 'List[UpstreamProject]':
-        return [UpstreamProject(p) for p in self.get_list_values('b2P')]
+    def projects_unique(self) -> 'List[RootProject]':
+        return [RootProject(p) for p in self._get_list_values('b2P')]
 
 
 class Commit(_GitObject):
+    ident = 'c'
     @cached_property
     def data_obj(self):
         _ret = {}
@@ -226,28 +243,53 @@ class Commit(_GitObject):
         return Tree(self.data_obj['tree'])
     
     @property
+    def _parent_shas(self) -> List[str]:
+        return self.data_obj['parent']
+    
+    @property
     def parents(self) -> List['Commit']:
         return [Commit(p) for p in self.data_obj['parent']]
     
     @cached_property
     def projects(self) -> List['Project']:
         """Projects associated with this commit"""
-        return [Project(p) for p in self.get_list_values('c2p')]
+        return [Project(p) for p in self._get_list_values('c2p')]
     
     @cached_property
     def children(self) -> List['Commit']:
         """Children of this commit"""
-        return [Commit(c) for c in self.get_list_values('c2cc')]
+        return [Commit(c) for c in self._get_list_values('c2cc')]
+    
+    @cached_property
+    def _file_names(self) -> List[str]:
+        return self._get_list_values('c2f')
+    
+    @cached_property
+    def _file_set(self) -> Set[str]:
+        return set(self._file_names)
     
     @cached_property
     def files(self) -> List['File']:
         """Files changed in this commit"""
-        return [File(f) for f in self.get_list_values('c2f')]
+        return [File(f) for f in self._file_names]
+    
+    @cached_property
+    def _blob_shas(self) -> List[str]:
+        return self._get_list_values('c2b')
+    
+    @cached_property
+    def _blob_set(self) -> Set[str]:
+        return set(self._blob_shas)
     
     @cached_property
     def blobs(self) -> List['Blob']:
-        """Blobs changed in this commit"""
-        return [Blob(b) for b in self.get_list_values('c2b')]
+        """
+        Blobs changed in this commit.
+        This relation is known to miss every first file in all trees.
+        Consider using Commit.tree.blobs as a slower but more accurate
+        alternative.
+        """
+        return [Blob(b) for b in self._get_list_values('c2b')]
     
     @cached_property
     def time_author(self) -> Tuple[datetime, Author]:
@@ -260,9 +302,113 @@ class Commit(_GitObject):
         """Root commit of the project"""
         sha, dis = self.woc.get_values('c2r', self.key)
         return Commit(sha), int(dis)
+    
+    def compare(
+        self, 
+        parent: Union['Commit', str], 
+        threshold=0.5
+    ) -> Generator[Tuple[Optional['File'], Optional['File'], Optional['Blob'], Optional['Blob']], None, None]:
+        """ Compare two Commits.
+
+        Args:
+            parent (Commit): another commit to compare to.
+                Expected order is `diff = child_commit - parent_commit`
+
+        Yields:
+            Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+                4-tuples: `(old_path, new_path, old_sha, new_sha)`
+
+            Examples:
+            - a new file 'setup.py' was created:
+                `(None, 'setup.py', None, 'file_sha')`
+            - an existing 'setup.py' was deleted:
+                `('setup.py', None, 'old_file_sha', None)`
+            - setup.py.old was renamed to setup.py, content unchanged:
+                `('setup.py.old', 'setup.py', 'file_sha', 'file_sha')`
+            - setup.py was edited:
+                `('setup.py', 'setup.py', 'old_file_sha', 'new_file_sha')`
+            - setup.py.old was edited and renamed to setup.py:
+                `('setup.py.old', 'setup.py', 'old_file_sha', 'new_file_sha')`
+
+        Detecting the last one is computationally expensive. You can adjust this
+        behaviour by passing the `threshold` parameter, which is 0.5 by default.
+        It means that if roughly 50% of the file content is the same,
+        it is considered a match. `threshold=1` means that only exact
+        matches are considered, effectively disabling this comparison.
+        If threshold is set to 0, any pair of deleted and added file will be
+        considered renamed and edited; this last case doesn't make much sense so
+        don't set it too low.
+        """
+        if isinstance(parent, str):
+            parent = Commit(parent)
+        if not isinstance(parent, Commit):
+            raise TypeError("parent must be a Commit or a commit hash")
+
+        # # filename: (blob sha before, blob sha after)
+        # new_files = self.tree._file_blob_map
+        # new_paths = self.tree._file_set
+        # old_files = parent.tree._file_blob_map
+        # old_paths = parent.tree._file_set
+        
+        # !!! We really need to traverse the trees ###
+        new_files: Dict[File, Blob] = {}
+        for f, b in self.tree.traverse():
+            new_files[f] = b
+        old_files: Dict[File, Blob] = {}
+        for f, b in parent.tree.traverse():
+            old_files[f] = b
+
+        # unchanged_paths
+        for f in new_files.keys() & old_files.keys():
+            if new_files[f] != old_files[f]:
+                # i.e. Blob sha Changed!
+                yield f, f, old_files[f], new_files[f]
+                
+        added_paths: Set[File] = new_files.keys() - old_files.keys()
+        deleted_paths: Set[File] = old_files.keys() - new_files.keys()
+
+        if threshold >= 1:  # i.e. only exact matches are considered
+            for f in added_paths:  # add
+                yield None, f, None, new_files[f]
+            for f in deleted_paths:
+                yield f, None, old_files[f], None
+            return
+        
+        if parent.hash not in self._parent_shas:
+            warnings.warn("Comparing non-adjacent commits might be "
+                          "computationally expensive. Proceed with caution.")
+
+        # search for matches
+        sm = difflib.SequenceMatcher()
+        # for each added blob, try to find a match in deleted blobs
+        #   if there is a match, signal a rename and remove from deleted
+        #   if there is no match, signal a new file
+        # unused deleted blobs are indeed deleted
+        for added_file, added_blob in new_files.items():
+            sm.set_seq1(added_blob.data)
+            matched = False
+            for deleted_file, deleted_blob in old_files.items():
+                sm.set_seq2(deleted_blob.data)
+                # use quick checks first (lower bound by length diff)
+                if sm.real_quick_ratio() > threshold \
+                        and sm.quick_ratio() > threshold \
+                        and sm.ratio() > threshold:
+                    yield deleted_file, added_file, deleted_blob, added_blob
+                    del(old_files[deleted_file])
+                    matched = True
+                    break
+            if not matched:  # this is a new file
+                yield None, added_file, None, added_blob
+
+        for deleted_file, deleted_blob in old_files.items():
+            yield deleted_file, None, deleted_blob, None
+            
+    def __sub__(self, parent: 'Commit'):
+        return self.compare(parent)
         
 
 class File(_NamedObject):
+    ident = 'f'
     @property
     def path(self) -> str:
         return self.key
@@ -273,47 +419,66 @@ class File(_NamedObject):
     
     @cached_property
     def authors(self) -> List[Author]:
-        return [Author(a) for a in self.get_list_values('f2a')]
+        return [Author(a) for a in self._get_list_values('f2a')]
     
     @cached_property
     def blobs(self) -> List[Blob]:
-        return [Blob(b) for b in self.get_list_values('f2b')]
+        return [Blob(b) for b in self._get_list_values('f2b')]
     
     @cached_property
     def commits(self) -> List[Commit]:
-        return [Commit(c) for c in self.get_list_values('f2c')]
+        return [Commit(c) for c in self._get_list_values('f2c')]
         
         
 class Tree(_GitObject):
+    ident = 't'
+    
     @cached_property
     def data(self) -> str:
         return self.woc.show_content('tree', self.key)
     
+    @property
+    def _file_names(self) -> List[str]:
+        return [l[1] for l in self.data]
+    
     @cached_property
-    def _file_names(self) -> Set[str]:
+    def _file_set(self) -> Set[str]:
         return set(l[1] for l in self.data)
     
-    @cached_property
-    def _blob_shas(self) -> Set[str]:
-        return set(l[2] for l in self.data)
-    
     @property
-    def files(self) -> str:
+    def files(self) -> List['File']:
         return [File(f) for f in self._file_names]
     
     @property
-    def blobs(self) -> str:
+    def _blob_shas(self) -> List[str]:
+        return [l[2] for l in self.data]
+    
+    @cached_property
+    def _blob_set(self) -> Set[str]:
+        return set(l[2] for l in self.data)
+    
+    @property
+    def blobs(self) -> List['Blob']:
         return [Blob(b) for b in self._blob_shas]
     
-    def traverse(self) -> 'Generator[Tuple[File, Blob], None, None]':
+    @cached_property
+    def _file_blob_map(self) -> Dict[str, str]:
+        return {l[1]: l[2] for l in self.data}
+    
+    def _traverse(self) -> 'Generator[Tuple[str, str], None, None]':
         for mode, fname, sha in self.data:
             # trees are always 40000:
             # https://stackoverflow.com/questions/1071241
             if mode != '40000':
-                yield File(fname), Blob(sha)
+                yield fname, sha
             else:
-                for _mode, _fname, _sha in Tree(sha).traverse():
-                    yield File(fname + '/' + _fname), Blob(_sha)
+                logger.debug(f"traverse: into {fname} ({sha})")
+                for _fname, _sha in Tree(sha)._traverse():
+                    yield fname + '/' + _fname, _sha
+                    
+    def traverse(self) -> 'Generator[Tuple[File, Blob], None, None]':
+        for fname, sha in self._traverse():
+            yield File(fname), Blob(sha)
     
     def __contains__(self, item: Union[str, File, Blob]) -> bool:
         if isinstance(item, str):
@@ -325,43 +490,184 @@ class Tree(_GitObject):
         return False
     
     def __str__(self) -> str:
-        return '\n'.join([''.join(l) for l in self.data])
+        return '\n'.join([' '.join(l) for l in self.data])
     
     def __len__(self) -> int:
         return len(self.data)
+    
+    def __iter__(self) -> 'Generator[Tuple[File, Blob], None, None]':
+        for l in self.data:
+            yield File(l[1]), Blob(l[2])
 
 
 class Project(_NamedObject):
-    @property
-    def platform(self) -> str:
-        raise NotImplemented
+    ident = 'p'
     
+    @cached_property
+    def _platform_repo(self) -> str:
+        URL_PREFIXES = self.woc.config["sites"]
+        prefix, body = self.key.split('_', 1)
+        if prefix == 'sourceforge.net':
+            platform = URL_PREFIXES[prefix]
+        elif prefix in URL_PREFIXES and '_' in body:
+            platform = URL_PREFIXES[prefix]
+            body = body.replace('_', '/', 1)
+        else:
+            platform = 'github.com'
+            body = self.key.replace('_', '/', 1)
+        return platform, body
+
     @property
     def url(self) -> str:
-        raise NotImplemented
+        """ Get the URL for a given project URI
+        >>> Project('CS340-19_lectures').url
+        'http://github.com/CS340-19/lectures'
+        """
+        platform, body = self._platform_repo
+        URL_PREFIXES = self.woc.config["sites"]
+        if platform in URL_PREFIXES:
+            return f"https://{URL_PREFIXES[platform]}/{body}"
+        return f"https://{platform}/{body}"
     
     @cached_property
     def authors(self) -> 'List[Author]':
-        return [Author(a) for a in self.get_list_values('p2a')]
+        return [Author(a) for a in self._get_list_values(f'{self.ident}2a')]
+    
+    @cached_property
+    def _commit_shas(self) -> 'List[str]':
+        return self._get_list_values(f'{self.ident}2c')
+    
+    @cached_property
+    def _commit_set(self) -> 'Set[str]':
+        return self._commit_map.keys()
+    
+    @cached_property
+    def _commit_map(self) -> 'Dict[str, Commit]':
+        return {c.hash: c for c in self.commits}
     
     @cached_property
     def commits(self) -> 'List[Commit]':
-        return [Commit(c) for c in self.get_list_values('p2c')]
+        return [Commit(c) for c in self._commit_shas]
     
     @cached_property
-    def upstream_projects(self) -> 'List[UpstreamProject]':
-        return [UpstreamProject(p) for p in self.get_list_values('p2P')]
+    def root_projects(self) -> 'List[RootProject]':
+        return [RootProject(p) for p in self._get_list_values(f'{self.ident}2P')]
     
+    def __contains__(self, item: Union[str, Commit]) -> bool:
+        if isinstance(item, str):
+            return item in self._commit_set
+        elif isinstance(item, Commit):
+            return item.hash in self._commit_set
+        return False
     
-class UpstreamProject(Project):
+    @cached_property
+    def head(self) -> 'Commit':
+        """ Get the HEAD commit of the repository
+
+        >>> Project('user2589_minicms').head
+        Commit(f2a7fcdc51450ab03cb364415f14e634fa69b62c)
+        >>> Project('RoseTHERESA_SimpleCMS').head
+        Commit(a47afa002ccfd3e23920f323b172f78c5c970250)
+        """
+        # Sometimes (very rarely) commit dates are wrong, so the latest commit
+        # is not actually the head. The magic below is to account for this
+        parents = set().union(*(c._parent_shas for c in self.commits))
+        heads = [self._commit_map[c] for c in self._commit_set - parents]
+
+        # it is possible that there is more than one head.
+        # E.g. it happens when HEAD is moved manually (git reset)
+        # and continued with a separate chain of commits.
+        # in this case, let's just use the latest one
+        # actually, storing refs would make it much simpler
+        _heads_sorted = sorted(heads, key=lambda c: c.authored_at or DAY_Z, reverse=True)
+        if len(_heads_sorted) == 0:
+            raise ValueError("No head commit found")
+        return _heads_sorted[0]
+
+    @cached_property
+    def tail(self) -> 'Commit':
+        """ Get the first commit SHA by following first parents
+
+        >>> Project(b'user2589_minicms').tail
+        Commit(1e971a073f40d74a1e72e07c682e1cba0bae159b)
+        """
+        pts = set(c._parent_shas[0] for c in self.commits if c._parent_shas)
+        for c in self.commits:
+            if c.hash in pts and not c._parent_shas:
+                return c
+            
+    @cached_property
+    def earliest_commit(self) -> 'Commit':
+        """Get the earliest commit of the repository"""
+        return min(self.commits, key=lambda c: c.authored_at or DAY_Z)
+    
+    @cached_property
+    def latest_commit(self) -> 'Commit':
+        """Get the latest commit of the repository"""
+        return max(self.commits, key=lambda c: c.authored_at or DAY_Z)
+            
+    def commits_fp(self) -> Generator['Commit', None, None]:
+        """ Get a commit chain by following only the first parent, to mimic
+        https://git-scm.com/docs/git-log#git-log---first-parent .
+        Thus, you only get a small subset of the full commit tree:
+
+        >>> p = Project(b'user2589_minicms')
+        >>> set(c.sha for c in p.commits_fp).issubset(p.commit_shas)
+        True
+
+        In scenarios where branches are not important, it can save a lot
+        of computing.
+
+        Yields:
+            Commit: binary commit shas, following first parent only,
+                from the latest to the earliest.
+        """
+        # Simplified version of self.head():
+        #   - slightly less precise,
+        #   - 20% faster
+        #
+        # out of 500 randomly sampled projects, 493 had the same head.
+        # In the remaining 7:
+        #     2 had the same commit chain length,
+        #     3 had one more commit
+        #     1 had two more commits
+        #     1 had three more commits
+        # Execution time:
+        #   simplified version (argmax): ~153 seconds
+        #   self.head(): ~190 seconds
+
+        # at this point we know all commits are in the dataset
+        # (validated in __iter___)
+        commit = self.latest_commit
+
+        while commit:
+            # no point try-except: the truth value of a list is len(list)
+            first_parent = commit._parent_shas and commit._parent_shas[0]
+            yield commit
+            if not first_parent:
+                break
+            commit = self._commit_map.get(first_parent, Commit(first_parent))
+            
+    def __iter__(self) -> 'Generator[Commit, None, None]':
+        for c in self.commits:
+            try:
+                if c.author in self.woc.config['ignoredAuthors']:
+                    continue
+                yield c
+            except KeyError:
+                pass
+    
+class RootProject(Project):
+    ident = 'P'
+    
     @cached_property
     def unique_authors(self) -> 'List[Author]':
-        return [UniqueAuthor(a) for a in self.get_list_values('P2A')]
+        return [UniqueAuthor(a) for a in self._get_list_values(f'{self.ident}2A')]
     
     @cached_property
     def commits(self) -> 'List[Commit]':
-        return [Commit(c) for c in self.get_list_values('P2c')]
+        return [Commit(c) for c in self._get_list_values(f'{self.ident}2C')]
     
     @cached_property
     def projects(self) -> 'List[Project]':
-        return [Project(p) for p in self.get_list_values('P2p')]
+        return [Project(p) for p in self._get_list_values(f'{self.ident}2p')]

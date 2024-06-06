@@ -112,12 +112,12 @@ class WocMapsCopier(WocMapsLocal):
         if obj == 'tree':
             _map_obj = self.config2['objects']['tree.tch']
             print('writing to tch', key, _map_obj["sharding_bits"])
-            write_to_tch(bytes.fromhex(key), value, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=True)
+            write_to_tch(bytes.fromhex(key), value, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=False)
         
         elif obj == 'commit':
             _map_obj = self.config2['objects']['commit.tch']
             print('writing to tch', key ,_map_obj["sharding_bits"])
-            write_to_tch(bytes.fromhex(key), value, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=True)
+            write_to_tch(bytes.fromhex(key), value, _map_obj['shards'], _map_obj['sharding_bits'], use_fnv_keys=False)
         
         elif obj == 'blob':
             # read blob
@@ -174,3 +174,22 @@ if __name__ == '__main__':
     cp.copy_content('commit', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
     cp.copy_content('blob', '05fe634ca4c8386349ac519f899145c75fff4169')
     cp.copy_content('blob', '46aaf071f1b859c5bf452733c2583c70d92cd0c8')
+    # woc-hack_thebridge
+    cp.copy_values('p2c', 'woc-hack_thebridge')
+    cp.copy_content('commit', '0d8228bb25ce89c7e731c7410bc8c5a4e2636e52')
+    cp.copy_content('commit', '34a8662a4f31dacb923e39ae6792f6fc4476a939')
+    cp.copy_content('commit', '898d5a21241aaf16acf92566aa34103d06cf2ac6')
+    cp.copy_content('commit', '91f4da4c173e41ffbf0d9ecbe2f07f3a3296933c')
+    cp.copy_content('commit', 'ae6e15fa4d8d4d454977ddbb4e97e922ddecebf7')
+    cp.copy_content('commit', 'f249b14a111279faa8d65c29ecf46bb6ce59a139')
+    cp.copy_content('tree', '706aa4dedb560358bff21c3120a0b09532d3484d')
+    cp.copy_content('tree', '3ccf6f8320740a1afec68b38b3b9ba46cedef368')
+    cp.copy_content('tree' ,'e5798457aebae7c84eff7b80b50c3a938cc4cb63')
+    cp.copy_content('tree', '836f04d5b374033b1608269e2f3aaabae263a0db')
+    cp.copy_content('tree', 'f54cb5527226aa2096307c08e15c62248b98f763')
+    cp.copy_content('tree', 'da65e1401d11a955686b8a49e46b9a457f3febab')
+    cp.copy_content('tree', 'a28f1558be9867d35cc1fa17477565c08786cf83')
+    cp.copy_content('tree', '4db2ad30097924cbe5da9c0f2c49350fdc19c3a4')
+    cp.copy_content('tree', '1cf86145b4a9492ebbe0fa640638504946315ca6')
+    cp.copy_content('tree', '29a422c19251aeaeb907175e9b3219a9bed6c616')
+    cp.copy_content('tree', '51968a7a4e67fd2696ffd5ccc041560a4d804f5d')
