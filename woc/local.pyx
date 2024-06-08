@@ -200,6 +200,7 @@ cpdef uint8_t get_shard(bytes key, uint8_t sharding_bits, bint use_fnv_keys):
     return prefix
 
 cpdef bytes get_from_tch(bytes key, list shards, int sharding_bits, bint use_fnv_keys):
+    """DEPRECATED"""
     # not 100% necessary but there are cases where some tchs are miserably missing
     _shard = get_shard(key, sharding_bits, use_fnv_keys)
     _path = shards[_shard]
@@ -585,21 +586,21 @@ class WocMapsLocal(WocMapsBase):
     
         if in_dtype == 'h':
             if isinstance(key, str):
-                _hex = key
+                hex_str = key
                 key = bytes.fromhex(key)
             else:
-                _hex = bytes(key).hex()
+                hex_str = bytes(key).hex()
         else:
             assert isinstance(key, str), "key must be a string for non-hash keys"
-            _hex = hex(fnvhash(key.encode('utf-8')))[2:]
+            hex_str = hex(fnvhash(key.encode('utf-8')))[2:]
             key = key.encode('utf-8')
 
-        logger.debug(f"hash: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+        logger.debug(f"hash: hex={hex_str} in {(time.time_ns() - start_time) / 1e6:.2f}ms")
         start_time = time.time_ns()
 
-        if "larges" in _map and _hex in _map["larges"]:
-            _bytes = read_large(_map["larges"][_hex], out_dtype)
-            logger.debug(f"read large: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+        if "larges" in _map and hex_str in _map["larges"]:
+            _bytes = read_large(_map["larges"][hex_str], out_dtype)
+            logger.debug(f"read large: file={_map['larges'][hex_str]} in {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
 
             # compress string data is not compressed in larges
@@ -607,8 +608,20 @@ class WocMapsLocal(WocMapsBase):
                 out_dtype = 's'
         else:
             # use fnv hash as shading idx if key is not a git sha
-            _bytes = get_from_tch(key, _map["shards"], _map["sharding_bits"], in_dtype != 'h')
-            logger.debug(f"get from tch: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            _shard = get_shard(key, _map["sharding_bits"], in_dtype != 'h')
+            _path = _map["shards"][_shard]
+            assert _path, f"shard {_shard} not found at {_path}"
+            
+            _tch = get_tch(_path.encode('utf-8'))
+
+            # TODO: remove bb2cf quirk after fixing tch keys
+            # bb2cf: keys are stored as hex strings in tch db
+            if map_name == 'bb2cf':
+                key = key.hex().encode('ascii')
+
+            _bytes = _tch[key]
+
+            logger.debug(f"get from tch: shard={_shard} db={_path} in {(time.time_ns() - start_time) / 1e6:.2f}ms")
 
         return _bytes, out_dtype
 
@@ -624,7 +637,7 @@ class WocMapsLocal(WocMapsBase):
         _bytes, decode_dtype = self._get_tch_bytes(map_name, key)
         start_time = time.time_ns()
         _decoded = decode_value(_bytes, decode_dtype)
-        logger.debug(f"decode: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+        logger.debug(f"decode: in {(time.time_ns() - start_time) / 1e6:.2f}ms")
         return _decoded
 
     def _get_pos(
@@ -712,19 +725,19 @@ class WocMapsLocal(WocMapsBase):
 
         if obj_name == 'tree':
             _ret = decode_tree(decomp_or_raw(self._get_tch_bytes(obj_name, key)[0]))
-            logger.debug(f"decode tree: {len(_ret)}items {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            logger.debug(f"decode tree: len={len(_ret)} in {(time.time_ns() - start_time) / 1e6:.2f}ms")
             return _ret
 
         elif obj_name == 'commit':
             _ret = decode_commit(decomp_or_raw(self._get_tch_bytes(obj_name, key)[0]))
-            logger.debug(f"decode commit: {len(_ret)}items {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            logger.debug(f"decode commit: len={len(_ret)}items in {(time.time_ns() - start_time) / 1e6:.2f}ms")
             return _ret
 
         elif obj_name == 'blob':
             key = bytes.fromhex(key) if isinstance(key, str) else key
 
             offset, length = self._get_pos('blob', key)
-            logger.debug(f"pos: offset={offset} len={length} {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            logger.debug(f"decode pos: offset={offset} len={length} in {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
 
             _map_obj = self.config['objects']['blob.bin']
@@ -733,7 +746,7 @@ class WocMapsLocal(WocMapsBase):
             with open(_map_obj['shards'][shard], "rb") as f:
                 f.seek(offset)
                 _out_bin = f.read(length)
-            logger.debug(f"read blob: {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            logger.debug(f"read blob: in {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
 
             return decode_str(decomp_or_raw(_out_bin))

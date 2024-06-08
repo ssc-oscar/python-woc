@@ -115,9 +115,7 @@ def infer_dtype(map_name: str) -> Tuple[str, str]:
     if ent_all in ('b2baddate', 'b2manyp'):
         dtype_in, dtype_out = 's', 'h'
     if ent_all in ('c2fbb', 'obb2cf', 'bb2cf'):
-        dtype_in, dtype_out = 'h', 'cs'
-    if ent_all in ('c2fbb', 'obb2cf', 'bb2cf'):
-        dtype_in, dtype_out = 'h', 'cs'
+        dtype_in, dtype_out = 'h', 'cs3'
     if ent_all in ('c2dat',):
         dtype_in, dtype_out = 'h', 's'
     if ent_all in ('b2tac',):
