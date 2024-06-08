@@ -20,7 +20,10 @@
         "dat": "colon_seperated_data",
         "tch": "compressed_data",
         "bin": "binary_data",
-        "idx": "binary_index"
+        "idx": "binary_index",
+        "bb": "new_blob",
+        "obb": "old_blob",
+        "fb": "first_blob"
     },
     "dtypes": {
         "h": "hex",

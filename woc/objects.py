@@ -67,6 +67,7 @@ class _WocObject:
         return hex(hash(self))[2:]
     
     def _get_list_values(self, map_name: str):
+        """ A thin wrapper around WocMapsBase.get_values to handle KeyError """
         try:
             return self.woc.get_values(map_name, self.key)
         except KeyError:
@@ -134,24 +135,45 @@ class Author(_NamedObject):
     
     @cached_property
     def blobs(self) -> 'List[Blob]':
-        return [Blob(b) for b in self._get_list_values('a2b')]
+        return [Blob(b) for b in self._get_list_values(f'{self.ident}2b')]
     
     @cached_property
     def commits(self) -> 'List[Commit]':
-        return [Commit(c) for c in self._get_list_values('a2c')]
+        return [Commit(c) for c in self._get_list_values(f'{self.ident}2c')]
     
     @cached_property
     def files(self) -> 'List[File]':
-        return [File(f) for f in self._get_list_values('a2f')]
+        return [File(f) for f in self._get_list_values(f'{self.ident}2f')]
     
     @cached_property
     def projects(self) -> 'List[Project]':
-        return [Project(p) for p in self._get_list_values('a2p')]
+        return [Project(p) for p in self._get_list_values(f'{self.ident}2p')]
+    
+    @cached_property
+    def unique_authors(self) -> List['UniqueAuthor']:
+        return [UniqueAuthor(a) for a in self._get_list_values(f'{self.ident}2A')]
+    
+    @property
+    def authors(self):
+        raise NotImplementedError("Author object does not have authors method")
+    
+    @cached_property
+    def first_blobs(self) -> List['Blob']:
+        return [Blob(b) for b in self._get_list_values(f'{self.ident}2fb')]
 
 
 class UniqueAuthor(Author):
     ident = 'A'
-    pass
+    
+    @property
+    def unique_authors(self) -> 'List[Author]':
+        raise NotImplementedError("UniqueAuthor object does not have unique_authors method")
+    
+    @cached_property
+    def authors(self) -> 'List[Author]':
+        return [Author(a) for a in self._get_list_values(f'{self.ident}2a')]
+    
+    
 
 
 class Blob(_GitObject):
@@ -195,7 +217,20 @@ class Blob(_GitObject):
     @cached_property
     def projects_unique(self) -> 'List[RootProject]':
         return [RootProject(p) for p in self._get_list_values('b2P')]
-
+    
+    @cached_property
+    def changed_from(self) -> 'List[Tuple[Blob, Commit, File]]':
+        return [
+            (Blob(b), Commit(c), File(f))
+            for b, c, f in self._get_list_values('bb2cf')
+        ]
+        
+    @cached_property
+    def changed_to(self) -> 'List[Tuple[Blob, Commit, File]]':
+        return [
+            (Blob(b), Commit(c), File(f))
+            for b, c, f in self._get_list_values('obb2cf')
+        ]
 
 class Commit(_GitObject):
     ident = 'c'
@@ -248,12 +283,18 @@ class Commit(_GitObject):
     
     @property
     def parents(self) -> List['Commit']:
+        """Parent commits of this commit"""
         return [Commit(p) for p in self.data_obj['parent']]
     
     @cached_property
     def projects(self) -> List['Project']:
         """Projects associated with this commit"""
         return [Project(p) for p in self._get_list_values('c2p')]
+    
+    @cached_property
+    def root_projects(self) -> List['RootProject']:
+        """Root projects associated with this commit"""
+        return [RootProject(p) for p in self._get_list_values('c2P')]
     
     @cached_property
     def children(self) -> List['Commit']:
@@ -302,6 +343,14 @@ class Commit(_GitObject):
         """Root commit of the project"""
         sha, dis = self.woc.get_values('c2r', self.key)
         return Commit(sha), int(dis)
+    
+    @cached_property
+    def changeset(self) -> 'List[Tuple[File, Blob, Blob]]':
+        """Returns changed files, their new and old blobs"""
+        return [
+            (File(f), Blob(new), Blob(old))
+            for f, new, old in self._get_list_values('c2fbb')
+        ]
     
     def compare(
         self, 
@@ -656,6 +705,10 @@ class Project(_NamedObject):
                 yield c
             except KeyError:
                 pass
+            
+    @property
+    def projects(self) -> List['Project']:
+        raise NotImplementedError("Project object does not have projects method")
     
 class RootProject(Project):
     ident = 'P'
@@ -671,3 +724,7 @@ class RootProject(Project):
     @cached_property
     def projects(self) -> 'List[Project]':
         return [Project(p) for p in self._get_list_values(f'{self.ident}2p')]
+    
+    @property
+    def root_projects(self) -> List['RootProject']:
+        raise NotImplementedError("RootProject object does not have root_projects method")
