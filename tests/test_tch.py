@@ -7,7 +7,7 @@ from woc.tch import TCHashDB
 def db(tmp_path):
     """Fixture to create and return a TCHashDB instance"""
     path = tmp_path / "test_db.tch"
-    db = TCHashDB(path=bytes(str(path), 'utf-8'))
+    db = TCHashDB(path=str(path))
     yield db
 
 def test_put_and_get(db):
@@ -64,3 +64,21 @@ def test_delitem(db):
     del db[key]
     with pytest.raises(KeyError):
         db.get(key)
+
+def test_open(tmp_path):
+    """Test that two TCHashDB instances can be opened concurrently"""
+    path = tmp_path / "test_db.tch"
+    db = TCHashDB(path=str(path), ro=False)
+    db[b'key'] = b'value'
+    # The following should yield no error
+    db.close()
+    db = TCHashDB(path=str(path), ro=True)
+    assert db[b'key'] == b'value'
+    # can't write to a read-only db
+    with pytest.raises(OSError):
+        db[b'key'] = b'value'  
+    # tch does not allow opening a db in the same process
+    # ref: lib/tchdb.c#L370
+    with pytest.raises(OSError):
+        db2 = TCHashDB(path=str(path), ro=True)
+   

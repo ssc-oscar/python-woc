@@ -3,10 +3,10 @@ from typing import Iterator
 class TCHashDB:
     """Object representing a TokyoCabinet Hash table"""
 
-    def __init__(self, path: bytes, ro: bool = False) -> None:
+    def __init__(self, path: str, ro: bool = False) -> None:
         """
         Create a new TokyoCabinet hash table object.
-        :path: *encoded* path to the database file
+        :path: path to the database file
         :ro: if True, open in lock-free read-only mode; if False, lock and open in write mode (create if not exists)
         """
         ...

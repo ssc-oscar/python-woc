@@ -6,7 +6,7 @@ cdef extern from 'tchdb.h':
 
 cdef class TCHashDB:
     cdef TCHDB* _db
-    cdef bytes filename
+    cdef str filename
 
     """Object representing a Tokyocabinet Hash table"""
     cpdef bytes get(self, bytes key)

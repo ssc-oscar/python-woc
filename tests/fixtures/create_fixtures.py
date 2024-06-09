@@ -49,8 +49,9 @@ def encode_value(
 def write_to_tch(key: bytes, value: bytes, shards: List[str], sharding_bits: int, use_fnv_keys: bool):
     shard = get_shard(key, sharding_bits, use_fnv_keys)
     _path = shards[shard]
-    db = TCHashDB(_path.encode())
+    db = TCHashDB(_path)
     db[key] = value
+    db.close()
 
 def write_large(path: str, key: bytes, value: bytes, dtype: str):
     if dtype == 'h':

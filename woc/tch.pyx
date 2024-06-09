@@ -38,7 +38,11 @@ cdef extern from 'tchdb.h':
 cdef class TCHashDB:
     """Object representing a Tokyocabinet Hash table"""
 
-    def __cinit__(self, char *path, bint ro=False):
+    def __cinit__(self, str path, bint ro=False):
+        self.filename = path
+        _encoded = path.encode()
+        cdef char* dbpath = _encoded 
+
         cdef int mode = 0
         if not ro:  # write mode: create if not exists
             mode |= HDBOWRITER
@@ -48,12 +52,11 @@ cdef class TCHashDB:
             mode |= HDBONOLCK
 
         self._db = tchdbnew()
-        self.filename = path
         if self._db is NULL:
             raise MemoryError()
-        cdef bint result = tchdbopen(self._db, path, mode)
+        cdef bint result = tchdbopen(self._db, dbpath, mode)
         if not result:
-            raise IOError(f'Failed to open {self.filename.decode("latin1")}: ' + self._error())
+            raise IOError(f'Failed to open {self.filename}: ' + self._error())
 
     def _error(self):
         cdef int code = tchdbecode(self._db)
@@ -67,7 +70,7 @@ cdef class TCHashDB:
             int sp
             bytes key
         if not result:
-            raise IOError(f'Failed to iterate {self.filename.decode("latin1")}: ' + self._error())
+            raise IOError(f'Failed to iterate {self.filename}: ' + self._error())
         while True:
             buf = <char *>tchdbiternext(self._db, &sp)
             if buf is NULL:
@@ -84,7 +87,7 @@ cdef class TCHashDB:
             int ksize=len(key)
         buf = <char *>tchdbget(self._db, k, ksize, &sp)
         if buf is NULL:
-            raise KeyError(f'Key {key.hex()} not found in {self.filename.decode("latin1")}')
+            raise KeyError(f'Key {key.hex()} not found in {self.filename}')
         cdef bytes value = PyBytes_FromStringAndSize(buf, sp)  
         free(buf)
         return value
@@ -98,7 +101,7 @@ cdef class TCHashDB:
             bint result
         result = tchdbput(self._db, k, ksize, v, vsize)
         if not result:
-            raise IOError(f'Failed to put {key.hex()} in {self.filename.decode("latin1")}: ' + self._error())
+            raise IOError(f'Failed to put {key.hex()} in {self.filename}: ' + self._error())
 
     cpdef void delete(self, bytes key) except *:
         cdef:
@@ -107,19 +110,19 @@ cdef class TCHashDB:
             bint result
         result = tchdbout(self._db, k, ksize)
         if not result:
-            raise IOError(f'Failed to delete {key.hex()} in {self.filename.decode("latin1")}: ' + self._error())
+            raise IOError(f'Failed to delete {key.hex()} in {self.filename}: ' + self._error())
 
     cpdef void drop(self) except *:
         cdef:
             bint result
         result = tchdbvanish(self._db)
         if not result:
-            raise IOError(f'Failed to drop all records in {self.filename.decode("latin1")}: ' + self._error())
+            raise IOError(f'Failed to drop all records in {self.filename}: ' + self._error())
 
     cpdef void close(self) except *:
         cdef bint result = tchdbclose(self._db)
         if not result:
-            raise IOError(f'Failed to close {self.filename.decode("latin1")}: ' + self._error())
+            raise IOError(f'Failed to close {self.filename}: ' + self._error())
 
     def __getitem__(self, bytes key):
         return self.get(key)
@@ -137,6 +140,4 @@ cdef class TCHashDB:
         self.close()
 
     def __dealloc__(self):
-        if self._db is not NULL:
-            tchdbdel(self._db)
-            self._db = NULL
+        free(self._db)  # it should never be null
