@@ -89,3 +89,11 @@ def test_blob_1(woc):
 def test_blob_2(woc):
     res = woc.show_content('blob', '46aaf071f1b859c5bf452733c2583c70d92cd0c8')
     assert len(res) == 1236
+
+def test_count(woc):
+    res = woc.count('blob')
+    assert res == 2
+    res = woc.count('tree')
+    assert res == 12
+    res = woc.count('commit')
+    assert res == 7

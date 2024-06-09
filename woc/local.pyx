@@ -777,3 +777,38 @@ class WocMapsLocal(WocMapsBase):
             raise NotImplemented
         else:
             raise ValueError(f'Unsupported object type: {obj_name}, expected one of tree, blob, commit, tkns, tag, bdiff')
+
+    def count(
+        self, map_name
+    ) -> int:
+        """
+        Count the number of keys in a map (# of larges + # of tch keys)
+        """
+        # translate obj_name to map_name
+        if map_name == 'tree':
+            map_name = 'tree.tch'
+        elif map_name == 'commit':
+            map_name = 'commit.tch'
+        elif map_name == 'blob':
+            map_name = 'sha1.blob.tch'
+
+        if self._is_debug_enabled:
+            start_time = time.time_ns()
+
+        if map_name in self.config["maps"]:
+            _map = self.config["maps"][map_name][0]
+        elif map_name in self.config["objects"]:
+            _map = self.config["objects"][map_name]
+        else:
+            raise KeyError(f'Invalid map name: {map_name}, '
+                f'expect one of {", ".join(self.config["maps"].keys())}')
+        
+        _count = len(_map["larges"]) if "larges" in _map else 0
+        for _shard in _map["shards"]:
+            _tch = get_tch(_shard)
+            _count += len(_tch)
+
+        if self._is_debug_enabled:
+            self._logger.debug(f'count: len={_count} shards={len(_map["shards"])} '
+                         f'larges={len(_map["larges"])} in {(time.time_ns() - start_time) / 1e6:.2f}ms')
+        return _count

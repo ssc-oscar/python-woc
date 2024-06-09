@@ -25,6 +25,14 @@ class WocMapsLocal(WocMapsBase):
         """
         ...
 
+    def count(
+        self, map_name: str
+    ) -> int:
+        """
+        Count the number of keys in a map (# of larges + # of tch keys)
+        """
+        ...
+
 # The following functions are internal and should not be used by the user
 # Exposing them here for testing purposes
 def fnvhash(data: bytes) -> int: ...
