@@ -6,6 +6,7 @@
 
 from .local import WocMapsLocal, decode_commit, decode_str, decomp_or_raw
 
+
 def format_tree(tree_objs: list) -> str:
     _out = ''
     for line in tree_objs:
@@ -65,8 +66,8 @@ def format_commit(sha: str, cmt_bin: bytes, format: int = 0):
 if __name__ == '__main__':
     import argparse
     import logging
-    import sys
     import os
+    import sys
 
     parser = argparse.ArgumentParser(description='See the Content of Git Object', usage='echo <key> | %(prog)s type (format)')
     parser.add_argument('type', type=str, help='The type of the object')

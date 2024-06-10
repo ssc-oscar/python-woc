@@ -49,11 +49,8 @@ cpdef unber(bytes buf):
     Format definition: from http://perldoc.perl.org/functions/pack.html
         (see "w" template description)
 
-    Args:
-        buf (bytes): a binary string with packed values
-
-    Returns:
-         str: a list of unpacked values
+    :param buf: a binary string with packed values
+    :return: a list of unpacked values
 
     >>> unber(b'\x00\x83M')
     [0, 461]
@@ -77,16 +74,14 @@ cpdef unber(bytes buf):
     return res
 
 cpdef (int, int) lzf_length(bytes raw_data):
-    r""" Get length of uncompressed data from a header of Compress::LZF
-    output. Check Compress::LZF sources for the definition of this bit magic
-        (namely, LZF.xs, decompress_sv)
-        https://metacpan.org/source/MLEHMANN/Compress-LZF-3.8/LZF.xs
+    r""" Get length of uncompressed data from a header of Compress::LZF output. 
+    
+    Check Compress::LZF sources for the definition of this bit magic:
+    (namely, LZF.xs, decompress_sv)
+    https://metacpan.org/source/MLEHMANN/Compress-LZF-3.8/LZF.xs
 
-    Args:
-        raw_data (bytes): data compressed with Perl Compress::LZF
-
-    Returns:
-         Tuple[int, int]: (header_size, uncompressed_content_length) in bytes
+    :param raw_data: data compressed with Perl `Compress::LZF`
+    :return: (header_size, uncompressed_content_length) in bytes
 
     >>> lzf_length(b'\xc4\x9b')
     (2, 283)
@@ -122,15 +117,13 @@ cpdef (int, int) lzf_length(bytes raw_data):
 
 def decomp(bytes raw_data):
     # type: (bytes) -> bytes
-    """ lzf wrapper to handle perl tweaks in Compress::LZF
+    """lzf wrapper to handle perl tweaks in `Compress::LZF`
+
     This function extracts uncompressed size header
     and then does usual lzf decompression.
 
-    Args:
-        raw_data (bytes): data compressed with Perl Compress::LZF
-
-    Returns:
-        str: unpacked data
+    :param raw_data: data compressed with Perl `Compress::LZF`
+    :return: unpacked data
     """
     if not raw_data:
         return b''
@@ -173,7 +166,7 @@ cdef dict _TCH_POOL = {}  # type: Dict[str, TCHashDB]
 TCH_LOCK = Lock()
 
 cpdef TCHashDB get_tch(str path):
-    """ Cache Hash() objects """
+    """ Cache TCHashDB objects """
     if path in _TCH_POOL:
         return _TCH_POOL[path]
     try:
@@ -213,6 +206,9 @@ def decode_value(
     value: bytes,
     out_dtype: str
 ):
+    """
+    Decode values from tch maps.
+    """
     if out_dtype == 'h':  # type: list[str]
         return [value[i:i + 20].hex() for i in range(0, len(value), 20)]
     elif out_dtype == 'sh':  # type: tuple[str, str, str]
@@ -247,15 +243,12 @@ def decode_tree(
     value: bytes
 ) -> List[Tuple[str, str, str]]:
     """
-    Decode a tree binary object into tuples
+    Decode a tree binary object into tuples.
+
     Python: 4.77 µs, Cython: 280 ns
     Reference: https://stackoverflow.com/questions/14790681/
-        mode   (ASCII encoded decimal)
-        SPACE (\0x20)
-        filename
-        NULL (\x00)
-        20-byte binary hash
-    >>> decode_tree(b'100644 .gitignore\x00\x8e\x9e\x1f...')
+    
+    >>> decode_tree(b'100644 .gitignore\\x00\\x8e\\x9e\\x1f...')
     [('100644', '.gitignore', '8e9e1...'), ...]
     """
     files = []
@@ -352,15 +345,17 @@ def decode_commit(
     commit_bin: bytes
 ) -> Tuple[str, Tuple[str, str, str], Tuple[str, str, str], str]:
     """
-    Decode git commit objects into tuples
+    Decode git commit objects into tuples.
+
     Python: 2.35 µs, Cython: 855 ns
     Reference: https://git-scm.com/book/en/v2/Git-Internals-Git-Objects
+
     >>> decode_commit(b'tree f1b66dcca490b5c4455af319bc961a34f69c72c2\\n...')
     ('f1b66dcca490b5c4455af319bc961a34f69c72c2',
-        ('c19ff598808b181f1ab2383ff0214520cb3ec659',),
-        ('Audris Mockus <audris@utk.edu> 1410029988', '1410029988', '-0400'),
-        ('Audris Mockus <audris@utk.edu>', '1410029988', '-0400'),
-        'News for Sep 5, 2014\n')
+     ('c19ff598808b181f1ab2383ff0214520cb3ec659',),
+     ('Audris Mockus <audris@utk.edu> 1410029988', '1410029988', '-0400'),
+     ('Audris Mockus <audris@utk.edu>', '1410029988', '-0400'),
+     'News for Sep 5, 2014\\n')
     """
     cdef:
         const char* cmt_cstr = commit_bin
@@ -640,7 +635,7 @@ class WocMapsLocal(WocMapsBase):
         map_name: str,
         key: Union[bytes, str],
     ):
-        """Eqivalent to getValues in WoC Perl API
+        """Eqivalent to getValues in WoC Perl API.
         >>> self.get_values('P2c', 'user2589_minicms')
         ['05cf84081b63cda822ee407e688269b494a642de', ...]
         """

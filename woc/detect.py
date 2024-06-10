@@ -4,23 +4,25 @@
 # @authors: Runzhi He <rzhe@pku.edu.cn>
 # @date: 2024-01-17
 
-import os
+import argparse
 import json
 import logging
-import argparse
+import os
 import re
-from typing import Iterable, Tuple, Optional
 from functools import cmp_to_key
+from typing import Iterable, Optional, Tuple
 
-DEFAULT_PROFILE = os.path.join(os.path.dirname(__file__), 'wocprofile.default.json')
+_default_profile = os.path.join(os.path.dirname(__file__), 'wocprofile.default.json')
 _logger = logging.getLogger(__name__)
 _logger.setLevel(logging.INFO)
 
 MAP_REGEX = r"^(\w+)2(\w+)Full(\w+)(?:.(\d+))?.tch$"
+"""Filename regex for basemap files"""
 _map_pat = re.compile(MAP_REGEX)
 def parse_map_fname(fname: str):
     """
-    Parse basemap filename into (src, dst, ver, idx)
+    Parse basemap filename into (src, dst, ver, idx).
+
     >>> parse_map_fname('c2fFullR.3.tch')
     ('c', 'f', 'R', '3')
     >>> parse_map_fname('c2fFullR.tch')
@@ -32,10 +34,12 @@ def parse_map_fname(fname: str):
     return m.groups()
 
 LARGE_REGEX = r"^(\w+)2(\w+)Full(\w+)(?:.(\d+))?.tch.large.([0-9a-f]+)$"
+"""Filename regex for large basemap files"""
 _large_pat = re.compile(LARGE_REGEX)
 def parse_large_fname(fname: str):
     """
-    Parse basemap filename into (src, dst, ver, idx, hash)
+    Parse basemap filename into (src, dst, ver, idx, hash).
+
     >>> parse_large_fname('A2cFullU.15.tch.large.59016a4f')
     ('A', 'c', 'U', '15', '59016a4f')
     """
@@ -45,10 +49,12 @@ def parse_large_fname(fname: str):
     return m.groups()
 
 OBJ_REGEX = r"^([\w\.]+)_(\d+).(idx|bin|tch)$"
+"""Filename regex for object files"""
 _obj_pat = re.compile(OBJ_REGEX)
 def parse_obj_fname(fname: str):
     """
-    Parse sha1map (sha1o/sha1c/blob) filename into (name, idx, ext)
+    Parse sha1map (sha1o/sha1c/blob) filename into (name, idx, ext).
+
     >>> parse_obj_fname('commit_0.tch')
     ('commit', '0', 'tch')
     >>> parse_obj_fname('blob_0.idx')
@@ -63,7 +69,8 @@ def parse_obj_fname(fname: str):
 
 def compare_woc_version(ver1: str, ver2: str):
     """
-    Compare two woc version strings (A < Z < AA)
+    Compare two woc version strings (A < Z < AA).
+
     >>> compare_woc_version('S', 'T') > 0
     False
     >>> compare_woc_version('AA', 'U') > 0
@@ -75,7 +82,8 @@ def compare_woc_version(ver1: str, ver2: str):
 
 def infer_dtype(map_name: str) -> Tuple[str, str]:
     """
-    Infer the data types from the map's name (entity -> entity)
+    Infer the data types from the map's name (entity -> entity).
+
     Should be bug-to-bug compatible with:
     https://github.com/ssc-oscar/lookup/blob/7289885/getValues.perl#L34
     >>> infer_dtype('c2f')
@@ -126,10 +134,13 @@ def infer_dtype(map_name: str) -> Tuple[str, str]:
 def detect_profile(
     paths: Iterable[str],
     version: Optional[str] = None,
-    preset_path: str = DEFAULT_PROFILE,
+    preset_path: Optional[str] = None,
     check_missing: bool = True
 ):
     _maps, _objs = {}, {}
+    
+    if not preset_path:
+        preset_path = _default_profile
 
     def _handle_map(src, dst, ver, idx, hash):
         if version and ver != version:
@@ -256,16 +267,16 @@ def detect_profile(
     res["objects"] = _ls_objs
     return res
 
-parser = argparse.ArgumentParser(description='Detect woc profile')
-parser.add_argument('paths', metavar='PATH', type=str, nargs='+', help='path to woc directory')
-parser.add_argument('--version', type=str, default=None, help='woc mapping version')
-parser.add_argument('--preset', type=str, default=DEFAULT_PROFILE, help='path to preset profile')
-parser.add_argument('--output', type=str, default=None, help='path to output profile')
-parser.add_argument('--no-skip-missing', dest='check_missing', action='store_false', help='do not check missing shards')
-
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
+
+    parser = argparse.ArgumentParser(description='Detect woc profile')
+    parser.add_argument('paths', metavar='PATH', type=str, nargs='+', help='path to woc directory')
+    parser.add_argument('--version', type=str, default=None, help='woc mapping version')
+    parser.add_argument('--preset', type=str, default=_default_profile, help='path to preset profile')
+    parser.add_argument('--output', type=str, default=None, help='path to output profile')
+    parser.add_argument('--no-skip-missing', dest='check_missing', action='store_false', help='do not check missing shards')
 
     args = parser.parse_args()
     

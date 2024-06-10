@@ -5,16 +5,18 @@
 # @date: 2024-05-27
 
 from typing import Iterable
+
 from .local import WocMapsLocal
+
 
 def format_map(key: str, map_objs: Iterable) -> str:
     return key + ';' + ';'.join(map(str, map_objs))
 
 if __name__ == '__main__':
     import argparse
-    import sys
-    import os
     import logging
+    import os
+    import sys
 
     parser = argparse.ArgumentParser(description='Get record of various maps')
     parser.add_argument('type', type=str, help='The type of the object')

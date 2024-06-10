@@ -1,12 +1,20 @@
-from typing import Iterable, Union, Tuple, List
+from typing import Iterable, List, Tuple, Union
 
-from .base import WocMapsBase, WocObjectsWithContent
+from .base import WocMapsBase
 
 class WocMapsLocal(WocMapsBase):
     def __init__(self, 
-            profile_path: str | Iterable[str] | None = None,
-            version: str | Iterable[str] | None = None
+            profile_path: Union[str, Iterable[str], None] = None,
+            version: Union[str, Iterable[str], None] = None
         ) -> None: 
+        """
+        Initialize local WoC maps with a profile.
+
+        :param profile_path: path to the woc profile.
+                             if not provided, use `./wocprofile.json`, `~/.wocprofile.json`, `/etc/wocprofile.json`.
+        :param version: version of the profile, default to the latest version.
+                        **NOT IMPLEMENTED YET**
+        """
         ...
         
     def _get_tch_bytes(
@@ -19,17 +27,10 @@ class WocMapsLocal(WocMapsBase):
     ) -> Tuple[int, int]:
         """
         Get offset and length of a stacked binary object, currently only support blob.
+
         Extract this part because it's much cheaper than decode the content.
         >>> self._get_pos('blob', bytes.fromhex('7a374e58c5b9dec5f7508391246c48b73c40d200'))
         (0, 123)
-        """
-        ...
-
-    def count(
-        self, map_name: str
-    ) -> int:
-        """
-        Count the number of keys in a map (# of larges + # of tch keys)
         """
         ...
 

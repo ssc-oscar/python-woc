@@ -1,8 +1,6 @@
-# Tutorial basics for Hackathon
--------
 ## List of relevant directories
 ### da0 Server
-#### <relationship>.{0-31}.tch files in `/data/basemaps/`:  
+#### `<relationship>.{0-31}.tch` files in `/data/basemaps/`:  
 (.s) signifies that there are either .s or .gz versions of these files in gz/ subfolder, which can be opened with Python gzip module or Unix zcat.  
 da0 is the only server with these .s/.gz files  
 Keys for identifying letters:   
