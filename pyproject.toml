@@ -22,20 +22,23 @@ python = "^3.8"
 python-lzf = "^0.2.4"
 chardet = "^5.2.0"
 
-[tool.poetry.group.dev.dependencies]
+[tool.poetry.group.build.dependencies]
 cython = "^0.29.0"
+
+[tool.poetry.group.dev.dependencies]
 pytest = "^8.2.2"
 pytest-cov = "^5.0.0"
 coverage = {extras = ["toml"], version = "^7.5.3"}
 # bandit = "^1.7.8"
 # docformatter = "^1.7.5"
-ruff = "^0.4.6"  # <- ruff is powerful enough to be the only linter
+ruff = "^0.4.4"  # <- ruff is powerful enough to be the only linter
 # sphinx = "^7.1.2"
 # sphinx-rtd-theme = "^1.0.0"
 # sphinx-autobuild = "^2021.3.14"
 # sphinx-pyproject = "^0.3.0"
 # sphinx-autodoc-typehints = "^1.25.3"
 pdoc = "^14.5.0" # <- drop sphinx, too many deps and rst is not fun
+pre-commit = "^3.5"
 
 [build-system]
 requires = ["poetry-core", "Cython>=0.29.0,<1.0.0", "setuptools>=42"]
@@ -118,11 +121,11 @@ ignore = ["E203", "E501", "E741"]
 [tool.ruff.lint.per-file-ignores]
 # loose checks for test files
 "tests/**/*.py" = [
-    "S101", 
-    "ARG", 
+    "S101",
+    "ARG",
     "FBT",
-    "PLR2004", 
-    "S311", 
+    "PLR2004",
+    "S311",
     "D",
     "F405",
     "F403",

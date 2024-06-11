@@ -1,0 +1,44 @@
+ci:
+  skip: [pytest]
+
+default_language_version:
+  python: python3.8
+
+repos:
+  # general checks (see here: https://pre-commit.com/hooks.html)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  # ruff: linting + formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
+
+  # pytest: testing
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: poetry run pytest
+        language: system
+        types: [python]
+        pass_filenames: false
+
+  # # skip poetry check for now, it's large and slow
+  # # poetry: check lock and generate requirements.txt
+  # - repo: https://github.com/python-poetry/poetry
+  #   rev: 1.8.3
+  #   hooks:
+  #   - id: poetry-check
+  #     args: ["--lock"]
+  #   - id: poetry-export
+  #     args: ["-f", "requirements.txt", "--with", "build", "--output", "requirements.txt"]
+  #     verbose: true
