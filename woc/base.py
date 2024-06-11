@@ -1,4 +1,4 @@
-from typing import List, Literal, Tuple, Union
+from typing import Iterable, List, Literal, Tuple, Union
 
 WocObjectsWithContent = Literal["tree", "blob", "commit", "tkns", "tag", "bdiff"]
 """WoC objects stored in stacked binary files."""
@@ -8,6 +8,11 @@ WocSupportedProfileVersions = (1,)
 
 
 class WocMapsBase:
+    maps: Iterable[str]
+    """List of basemaps available in the WoC database."""
+    objects: Iterable[str]
+    """List of objects available in the WoC database."""
+
     def __init__(self, *args, **kwargs):
         raise NotImplementedError(
             "WocMapsBase is an abstract class, use WoCMapsLocal instead"

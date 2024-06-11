@@ -553,6 +553,10 @@ class WocMapsLocal(WocMapsBase):
                                     "Unsupported wocprofile version: {}".format(self.config["wocSchemaVersion"])
         assert self.config["maps"], "Run `python3 -m woc.detect` to scan data files and generate wocprofile.json"
 
+        # store name of maps and objects
+        self.maps = set(self.config["maps"].keys())
+        self.objects = set(self.config["objects"].keys())
+
     def _get_tch_bytes(
         self, map_name, key
     ) -> Tuple[bytes, str]:
@@ -568,13 +572,13 @@ class WocMapsLocal(WocMapsBase):
             map_name = 'sha1.blob.tch'
 
         # find dtype object
-        if map_name in self.config["maps"]:
+        if map_name in self.maps:
             _map = self.config["maps"][map_name][0]
-        elif map_name in self.config["objects"]:
+        elif map_name in self.objects:
             _map = self.config["objects"][map_name]
         else:
             raise KeyError(f'Invalid map name: {map_name}, '
-                f'expect one of {", ".join(self.config["maps"].keys())}')
+                f'expected one of {", ".join(self.maps | self.objects)}')
 
         in_dtype = _map["dtypes"][0] if "dtypes" in _map else "h"
         out_dtype = _map["dtypes"][1] if "dtypes" in _map else "c?"  # c? means maybe compressed
@@ -790,13 +794,13 @@ class WocMapsLocal(WocMapsBase):
         if self._is_debug_enabled:
             start_time = time.time_ns()
 
-        if map_name in self.config["maps"]:
+        if map_name in self.maps:
             _map = self.config["maps"][map_name][0]
-        elif map_name in self.config["objects"]:
+        elif map_name in self.objects:
             _map = self.config["objects"][map_name]
         else:
             raise KeyError(f'Invalid map name: {map_name}, '
-                f'expect one of {", ".join(self.config["maps"].keys())}')
+                f'expect one of {", ".join(self.maps | self.objects)}')
 
         _count = len(_map["larges"]) if "larges" in _map else 0
         for _shard in _map["shards"]:
