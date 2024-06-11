@@ -24,7 +24,7 @@ from .tch cimport TCHashDB
 
 cdef extern from 'Python.h':
     object PyBytes_FromStringAndSize(char *s, Py_ssize_t len)
-    
+
 ### Utility functions ###
 
 cpdef uint32_t fnvhash(bytes data):
@@ -37,7 +37,7 @@ cpdef uint32_t fnvhash(bytes data):
     cdef:
         uint32_t hval = 0x811c9dc5
         uint8_t b
-    for b in data:  
+    for b in data:
         hval ^= b
         hval *= 0x01000193
     return hval
@@ -63,19 +63,19 @@ cpdef unber(bytes buf):
     cdef:
         list res = []
         # blob_offset sizes are getting close to 32-bit integer max
-        uint64_t acc = 0  
+        uint64_t acc = 0
         uint8_t b
 
     for b in buf:
         acc = (acc << 7) + (b & 0x7f)
         if not b & 0x80:
             res.append(acc)
-            acc = 0  
+            acc = 0
     return res
 
 cpdef (int, int) lzf_length(bytes raw_data):
-    r""" Get length of uncompressed data from a header of Compress::LZF output. 
-    
+    r""" Get length of uncompressed data from a header of Compress::LZF output.
+
     Check Compress::LZF sources for the definition of this bit magic:
     (namely, LZF.xs, decompress_sv)
     https://metacpan.org/source/MLEHMANN/Compress-LZF-3.8/LZF.xs
@@ -175,7 +175,7 @@ cpdef TCHashDB get_tch(str path):
         # so we need a lock
         if path not in _TCH_POOL:
             # open database in read-only mode and allow concurrent access
-            _TCH_POOL[path] = TCHashDB(path, ro=True)  
+            _TCH_POOL[path] = TCHashDB(path, ro=True)
     finally:
         TCH_LOCK.release()
     return _TCH_POOL[path]
@@ -184,7 +184,7 @@ cpdef uint8_t get_shard(bytes key, uint8_t sharding_bits, bint use_fnv_keys):
     """ Get shard id """
     cdef uint8_t p
     if use_fnv_keys:
-        p = fnvhash(key)  
+        p = fnvhash(key)
     else:
         p = key[0]
     cdef uint8_t prefix = p & (2**sharding_bits - 1)
@@ -215,19 +215,19 @@ def decode_value(
         buf0 = value[0:len(value)-21]
         cmt_sha = value[(len(value)-20):len(value)]
         (Time, Author) = decode_str(buf0).split(";")
-        return (Time, Author, cmt_sha.hex())  
+        return (Time, Author, cmt_sha.hex())
     elif out_dtype == 'cs3':  # type: list[tuple[str, str, str]]
         data = decomp(value)
         _splited = decode_str(data).split(";")
         return [
             (_splited[i],_splited[i+1],_splited[i+2])
             for i in range(0, len(_splited), 3)
-        ] 
+        ]
     elif out_dtype == 'cs':   # type: list[str]
         data = decomp(value)
         return [decode_str(v)
             for v in data.split(b';')
-            if v and v != b'EMPTY'] 
+            if v and v != b'EMPTY']
     elif out_dtype == 's':  # type: list[str]
         return [decode_str(v)
             for v in value.split(b';')]
@@ -247,7 +247,7 @@ def decode_tree(
 
     Python: 4.77 µs, Cython: 280 ns
     Reference: https://stackoverflow.com/questions/14790681/
-    
+
     >>> decode_tree(b'100644 .gitignore\\x00\\x8e\\x9e\\x1f...')
     [('100644', '.gitignore', '8e9e1...'), ...]
     """
@@ -268,7 +268,7 @@ def decode_tree(
         pos = <const char*>memchr(pos, b' ', end - pos)
         if not pos:
             raise ValueError('Invalid tree object: missing space after mode')
-        
+
         mode_len = pos - mode_start
         pos += 1  # Skip the space
 
@@ -309,7 +309,7 @@ def decode_tree(
 #     _out_buf = []
 #     _file_buf = []
 #     _curr_buf = bytes()
-    
+
 #     # TODO: current impl is not efficient, need to optimize
 #     i = 0
 #     while i < len(value):
@@ -370,7 +370,7 @@ def decode_commit(
         bint is_reading_pgp = False
         int header_len
         int line_len
-    
+
     _parent_shas = []
     _tree = ''
     _author_bytes = b''
@@ -452,7 +452,7 @@ def decode_commit(
         tuple(_parent_shas),
         (_author, _author_timestamp, _author_timezone),
         (_committer, _committer_timestamp, _committer_timezone),
-        _message,   
+        _message,
     )
 
 # def decode_commit(cmt: bytes):
@@ -492,17 +492,17 @@ def decode_commit(
 #             _is_reading_pgp = False
 #         elif line.startswith('encoding'):
 #             encoding = line[8:]
-        
+
 #     return (
 #         tree,
 #         tuple(parent),
 #         (author, author_timestamp, author_timezone),
 #         (committer, committer_timestamp, committer_timezone),
-#         full_msg,  
+#         full_msg,
 #     )
 
 def read_large(path: str, dtype: str) -> bytes:
-    """Read a *.large.* and return its content""" 
+    """Read a *.large.* and return its content"""
     if dtype == 'h':
         with open(path, 'rb') as f:
             f.seek(20) # 160 bits of SHA1
@@ -519,7 +519,7 @@ def read_large(path: str, dtype: str) -> bytes:
 
 
 class WocMapsLocal(WocMapsBase):
-    def __init__(self, 
+    def __init__(self,
             profile_path: Union[str, Iterable[str], None] = None,
             version: Union[str, Iterable[str], None] = None
         ) -> None:
@@ -552,7 +552,7 @@ class WocMapsLocal(WocMapsBase):
         assert self.config["wocSchemaVersion"] in WocSupportedProfileVersions, \
                                     "Unsupported wocprofile version: {}".format(self.config["wocSchemaVersion"])
         assert self.config["maps"], "Run `python3 -m woc.detect` to scan data files and generate wocprofile.json"
-   
+
     def _get_tch_bytes(
         self, map_name, key
     ) -> Tuple[bytes, str]:
@@ -575,14 +575,14 @@ class WocMapsLocal(WocMapsBase):
         else:
             raise KeyError(f'Invalid map name: {map_name}, '
                 f'expect one of {", ".join(self.config["maps"].keys())}')
-        
+
         in_dtype = _map["dtypes"][0] if "dtypes" in _map else "h"
         out_dtype = _map["dtypes"][1] if "dtypes" in _map else "c?"  # c? means maybe compressed
 
         if self._is_debug_enabled:
             start_time = time.time_ns()
             self._logger.debug(f"get from tch: {map_name} {key}")
-    
+
         if in_dtype == 'h':
             if isinstance(key, str):
                 hex_str = key
@@ -600,7 +600,7 @@ class WocMapsLocal(WocMapsBase):
 
         if "larges" in _map and hex_str in _map["larges"]:
             _bytes = read_large(_map["larges"][hex_str], out_dtype)
-            
+
             if self._is_debug_enabled:
                 self._logger.debug(f"read large: file={_map['larges'][hex_str]} "
                                    f"in {(time.time_ns() - start_time) / 1e6:.2f}ms")
@@ -614,7 +614,7 @@ class WocMapsLocal(WocMapsBase):
             _shard = get_shard(key, _map["sharding_bits"], in_dtype != 'h')
             _path = _map["shards"][_shard]
             assert _path, f"shard {_shard} not found at {_path}"
-            
+
             _tch = get_tch(_path)
 
             # TODO: remove bb2cf quirk after fixing tch keys
@@ -684,7 +684,7 @@ class WocMapsLocal(WocMapsBase):
 
     #     if obj_name == 'tree':
     #         _map_obj = self.config['objects']['tree.tch']
-    #         v = get_from_tch(key, 
+    #         v = get_from_tch(key,
     #             shards=_map_obj['shards'],
     #             sharding_bits=_map_obj['sharding_bits'],
     #             use_fnv_keys=False
@@ -694,7 +694,7 @@ class WocMapsLocal(WocMapsBase):
 
     #     elif obj_name == 'commit':
     #         _map_obj = self.config['objects']['commit.tch']
-    #         v = get_from_tch(key, 
+    #         v = get_from_tch(key,
     #             shards=_map_obj['shards'],
     #             sharding_bits=_map_obj['sharding_bits'],
     #             use_fnv_keys=False
@@ -797,7 +797,7 @@ class WocMapsLocal(WocMapsBase):
         else:
             raise KeyError(f'Invalid map name: {map_name}, '
                 f'expect one of {", ".join(self.config["maps"].keys())}')
-        
+
         _count = len(_map["larges"]) if "larges" in _map else 0
         for _shard in _map["shards"]:
             _tch = get_tch(_shard)

@@ -17,7 +17,7 @@ cdef extern from 'tchdb.h':
     cdef enum:  # enumeration for open modes
         HDBOREADER = 1 << 0,                   # open as a reader
         HDBOWRITER = 1 << 1,                   # open as a writer
-        HDBOCREAT = 1 << 2,                    # writer creating 
+        HDBOCREAT = 1 << 2,                    # writer creating
         HDBOTRUNC = 1 << 3,                    # writer truncating
         HDBONOLCK = 1 << 4,                    # open without locking
 
@@ -41,7 +41,7 @@ cdef class TCHashDB:
     def __cinit__(self, str path, bint ro=False):
         self.filename = path
         _encoded = path.encode()
-        cdef char* dbpath = _encoded 
+        cdef char* dbpath = _encoded
 
         cdef int mode = 0
         if not ro:  # write mode: create if not exists
@@ -75,20 +75,20 @@ cdef class TCHashDB:
             buf = <char *>tchdbiternext(self._db, &sp)
             if buf is NULL:
                 break
-            key = PyBytes_FromStringAndSize(buf, sp)  
+            key = PyBytes_FromStringAndSize(buf, sp)
             free(buf)
             yield key
 
     cpdef bytes get(self, bytes key):
         cdef:
-            char *k = key  
+            char *k = key
             char *buf
             int sp
             int ksize=len(key)
         buf = <char *>tchdbget(self._db, k, ksize, &sp)
         if buf is NULL:
             raise KeyError(f'Key {key.hex()} not found in {self.filename}')
-        cdef bytes value = PyBytes_FromStringAndSize(buf, sp)  
+        cdef bytes value = PyBytes_FromStringAndSize(buf, sp)
         free(buf)
         return value
 

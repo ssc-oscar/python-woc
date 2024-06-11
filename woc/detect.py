@@ -12,13 +12,15 @@ import re
 from functools import cmp_to_key
 from typing import Iterable, Optional, Tuple
 
-_default_profile = os.path.join(os.path.dirname(__file__), 'wocprofile.default.json')
+_default_profile = os.path.join(os.path.dirname(__file__), "wocprofile.default.json")
 _logger = logging.getLogger(__name__)
 _logger.setLevel(logging.INFO)
 
 MAP_REGEX = r"^(\w+)2(\w+)Full(\w+)(?:.(\d+))?.tch$"
 """Filename regex for basemap files"""
 _map_pat = re.compile(MAP_REGEX)
+
+
 def parse_map_fname(fname: str):
     """
     Parse basemap filename into (src, dst, ver, idx).
@@ -33,9 +35,12 @@ def parse_map_fname(fname: str):
         return None
     return m.groups()
 
+
 LARGE_REGEX = r"^(\w+)2(\w+)Full(\w+)(?:.(\d+))?.tch.large.([0-9a-f]+)$"
 """Filename regex for large basemap files"""
 _large_pat = re.compile(LARGE_REGEX)
+
+
 def parse_large_fname(fname: str):
     """
     Parse basemap filename into (src, dst, ver, idx, hash).
@@ -48,9 +53,12 @@ def parse_large_fname(fname: str):
         return None
     return m.groups()
 
+
 OBJ_REGEX = r"^([\w\.]+)_(\d+).(idx|bin|tch)$"
 """Filename regex for object files"""
 _obj_pat = re.compile(OBJ_REGEX)
+
+
 def parse_obj_fname(fname: str):
     """
     Parse sha1map (sha1o/sha1c/blob) filename into (name, idx, ext).
@@ -67,6 +75,7 @@ def parse_obj_fname(fname: str):
         return None
     return m.groups()
 
+
 def compare_woc_version(ver1: str, ver2: str):
     """
     Compare two woc version strings (A < Z < AA).
@@ -80,6 +89,7 @@ def compare_woc_version(ver1: str, ver2: str):
         return len(ver1) - len(ver2)
     return ord(ver1[0]) - ord(ver2[0])
 
+
 def infer_dtype(map_name: str) -> Tuple[str, str]:
     """
     Infer the data types from the map's name (entity -> entity).
@@ -92,107 +102,113 @@ def infer_dtype(map_name: str) -> Tuple[str, str]:
     ('h', 'cs3')
     """
     ent_all = map_name.lower()
-    ent_in, ent_out = ent_all.split('2')
+    ent_in, ent_out = ent_all.split("2")
 
-    dtype_in, dtype_out = 'h', 'h'
+    dtype_in, dtype_out = "h", "h"
 
-    if ent_in in ('a', 'f', 'p'):
-        dtype_in = 's'
-    if ent_out in ('a', 'f', 'p'):
-        dtype_out = 'cs'
-    if ent_in in ('c','b','w','ob','td'):
-        dtype_in = 'h'
-    if ent_out in ('c','b','cc', 'pc','ob','td'):
-        dtype_out = 'h'
-    if ent_all == 'b2fa':
-        dtype_out = 'sh'
-    if ent_out in ('ta',):
-        dtype_out = 's'
-    if ent_all in ('b2tk', 'td2f'):
-        dtype_out = 's'
-    if ent_all in ('c2h', 'c2r'):
-        dtype_out = 'r'
-    if ent_in in ('ps', 'pf', 'pfs'):
-        dtype_in = 's'
-    if ent_out in ('ps', 'pf', 'pfs'):
-        dtype_out = 's'
-    if ent_out in ('rhp',):
-        dtype_out = 'hhwww'
-    if ent_all in ('p2p', 'a2a'):
-        dtype_in, dtype_out = 's', 'cs'
-    if ent_all in ('b2baddate', 'b2manyp'):
-        dtype_in, dtype_out = 's', 'h'
-    if ent_all in ('c2fbb', 'obb2cf', 'bb2cf'):
-        dtype_in, dtype_out = 'h', 'cs3'
-    if ent_all in ('c2dat',):
-        dtype_in, dtype_out = 'h', 's'
-    if ent_all in ('b2tac',):
-        dtype_in, dtype_out = 'h', 'cs3'
+    if ent_in in ("a", "f", "p"):
+        dtype_in = "s"
+    if ent_out in ("a", "f", "p"):
+        dtype_out = "cs"
+    if ent_in in ("c", "b", "w", "ob", "td"):
+        dtype_in = "h"
+    if ent_out in ("c", "b", "cc", "pc", "ob", "td"):
+        dtype_out = "h"
+    if ent_all == "b2fa":
+        dtype_out = "sh"
+    if ent_out in ("ta",):
+        dtype_out = "s"
+    if ent_all in ("b2tk", "td2f"):
+        dtype_out = "s"
+    if ent_all in ("c2h", "c2r"):
+        dtype_out = "r"
+    if ent_in in ("ps", "pf", "pfs"):
+        dtype_in = "s"
+    if ent_out in ("ps", "pf", "pfs"):
+        dtype_out = "s"
+    if ent_out in ("rhp",):
+        dtype_out = "hhwww"
+    if ent_all in ("p2p", "a2a"):
+        dtype_in, dtype_out = "s", "cs"
+    if ent_all in ("b2baddate", "b2manyp"):
+        dtype_in, dtype_out = "s", "h"
+    if ent_all in ("c2fbb", "obb2cf", "bb2cf"):
+        dtype_in, dtype_out = "h", "cs3"
+    if ent_all in ("c2dat",):
+        dtype_in, dtype_out = "h", "s"
+    if ent_all in ("b2tac",):
+        dtype_in, dtype_out = "h", "cs3"
 
     return dtype_in, dtype_out
+
 
 def detect_profile(
     paths: Iterable[str],
     version: Optional[str] = None,
     preset_path: Optional[str] = None,
-    check_missing: bool = True
+    check_missing: bool = True,
 ):
     _maps, _objs = {}, {}
-    
+
     if not preset_path:
         preset_path = _default_profile
 
     def _handle_map(src, dst, ver, idx, hash):
         if version and ver != version:
-            logging.info(f'Found map {f} with version {ver}, expected {version}')
+            logging.info(f"Found map {f} with version {ver}, expected {version}")
             return
 
-        _map_name = f'{src}2{dst}'
+        _map_name = f"{src}2{dst}"
         if idx is None:
             idx = "0"
-        prefix_len = int(idx).bit_length() 
+        prefix_len = int(idx).bit_length()
 
-        _map = (_maps
-            .setdefault(_map_name, {})
-            .setdefault(ver, {
+        _map = _maps.setdefault(_map_name, {}).setdefault(
+            ver,
+            {
                 "version": ver,
                 "sharding_bits": prefix_len,
                 "shards": {},
                 "larges": {},
                 "dtypes": infer_dtype(_map_name),
-            })
+            },
         )
         if not hash:
-            logging.debug(f'Found map {f} with hash {hash} idx {idx}')
+            logging.debug(f"Found map {f} with hash {hash} idx {idx}")
             _map["shards"][int(idx)] = os.path.join(root, f)
         else:
-            logging.debug(f'Found large map {f} with hash {hash} idx {idx}')
+            logging.debug(f"Found large map {f} with hash {hash} idx {idx}")
             _map["larges"][hash] = os.path.join(root, f)
         _map["sharding_bits"] = max(_map["sharding_bits"], prefix_len)
-
 
     def _handle_obj(name, idx, ext):
         _map_name = f"{name}.{ext}"
         prefix_len = int(idx).bit_length() if idx else 0
-        _obj = (_objs
-            .setdefault(_map_name, {
+        _obj = _objs.setdefault(
+            _map_name,
+            {
                 "sharding_bits": prefix_len,
                 "shards": {},
-            })
+            },
         )
-        logging.debug(f'Found obj {f} idx {idx}')
+        logging.debug(f"Found obj {f} idx {idx}")
         _obj["shards"][int(idx)] = os.path.join(root, f)
         _obj["sharding_bits"] = max(_obj["sharding_bits"], prefix_len)
-
 
     for path in paths:
         # walk the directory for all files
         for root, _, files in os.walk(path):
             # only consider .tch, .idx, .bin files
-            files = [f for f in files if '.tch' in f or (not f.startswith('pack') and f.endswith('.idx')) or f.endswith('.bin')]
+            files = [
+                f
+                for f in files
+                if ".tch" in f
+                or (not f.startswith("pack") and f.endswith(".idx"))
+                or f.endswith(".bin")
+            ]
             for idx, f in enumerate(files):
                 if idx % 1000 == 0:
-                    _logger.info(f'Processing {f} in {path}, {idx+1}/{len(files)}')
+                    _logger.info(f"Processing {f} in {path}, {idx+1}/{len(files)}")
 
                 _r = parse_map_fname(f)
                 if _r:
@@ -205,84 +221,101 @@ def detect_profile(
                     src, dst, ver, idx, hash = _r
                     _handle_map(src, dst, ver, idx, hash)
                     continue
-                    
+
                 _r = parse_obj_fname(f)
                 if _r:
                     name, idx, ext = _r
                     _handle_obj(name, idx, ext)
                     continue
-                _logger.warning(f'Unrecognized file: {f}')
+                _logger.warning(f"Unrecognized file: {f}")
 
-    # transform maps  
+    # transform maps
     _ls_maps = {}
     for k, v in _maps.items():
         _to_drop = []
         for ver, vv in v.items():
             # convert shards to list
-            _ls = [None] * 2**vv['sharding_bits']
-            for kkk, vvv in vv['shards'].items():
+            _ls = [None] * 2 ** vv["sharding_bits"]
+            for kkk, vvv in vv["shards"].items():
                 _ls[kkk] = vvv
             # see if we can find the None in _ls
             _nones = [i for i, x in enumerate(_ls) if x is None]
             if _nones and check_missing:
-                _logger.warning(f'Cannot find shards {", ".join(map(str, _nones))} in map {k} ver {ver}, skipping')
+                _logger.warning(
+                    f'Cannot find shards {", ".join(map(str, _nones))} in map {k} ver {ver}, skipping'
+                )
                 _logger.warning(f"Got: {vv['shards']}")
                 _to_drop.append(ver)
             else:
-                vv['shards'] = _ls
+                vv["shards"] = _ls
         for ver in _to_drop:
             del v[ver]
 
         # move latest maps to the front of the list
         if len(v) == 0:
             continue
-        _ls_maps[k] = [vv for _, vv in sorted(
-            v.items(), 
-            key=cmp_to_key(lambda x, y: compare_woc_version(x[0], y[0])),
-            reverse=True
-        )]
+        _ls_maps[k] = [
+            vv
+            for _, vv in sorted(
+                v.items(),
+                key=cmp_to_key(lambda x, y: compare_woc_version(x[0], y[0])),
+                reverse=True,
+            )
+        ]
 
     # transform objects
     _ls_objs = {}
     for k, v in _objs.items():
         # convert shards to list
-        _ls = [None] * 2**v['sharding_bits']
-        for kk, vv in v['shards'].items():
+        _ls = [None] * 2 ** v["sharding_bits"]
+        for kk, vv in v["shards"].items():
             _ls[kk] = vv
         # see if we can find the None in _ls
         _nones = [i for i, x in enumerate(_ls) if x is None]
         if _nones and check_missing:
-            _logger.warning(f'Cannot find shards {", ".join(map(str, _nones))} in obj {k}, skipping')
+            _logger.warning(
+                f'Cannot find shards {", ".join(map(str, _nones))} in obj {k}, skipping'
+            )
             _logger.warning(f"Got: {v['shards']}")
         else:
-            v['shards'] = _ls
+            v["shards"] = _ls
             _ls_objs[k] = v
 
-                
     # load the preset profile
-    with open(preset_path, 'r') as f:
+    with open(preset_path, "r") as f:
         res = json.load(f)
 
     res["maps"] = _ls_maps
     res["objects"] = _ls_objs
     return res
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import doctest
+
     doctest.testmod()
 
-    parser = argparse.ArgumentParser(description='Detect woc profile')
-    parser.add_argument('paths', metavar='PATH', type=str, nargs='+', help='path to woc directory')
-    parser.add_argument('--version', type=str, default=None, help='woc mapping version')
-    parser.add_argument('--preset', type=str, default=_default_profile, help='path to preset profile')
-    parser.add_argument('--output', type=str, default=None, help='path to output profile')
-    parser.add_argument('--no-skip-missing', dest='check_missing', action='store_false', help='do not check missing shards')
+    parser = argparse.ArgumentParser(description="Detect woc profile")
+    parser.add_argument(
+        "paths", metavar="PATH", type=str, nargs="+", help="path to woc directory"
+    )
+    parser.add_argument("--version", type=str, default=None, help="woc mapping version")
+    parser.add_argument(
+        "--preset", type=str, default=_default_profile, help="path to preset profile"
+    )
+    parser.add_argument("--output", type=str, default=None, help="path to output profile")
+    parser.add_argument(
+        "--no-skip-missing",
+        dest="check_missing",
+        action="store_false",
+        help="do not check missing shards",
+    )
 
     args = parser.parse_args()
-    
+
     res = detect_profile(args.paths, args.version, args.preset, args.check_missing)
     if args.output:
-        with open(args.output, 'w') as f:
+        with open(args.output, "w") as f:
             json.dump(res, f, indent=2)
     else:
         print(json.dumps(res, indent=2))

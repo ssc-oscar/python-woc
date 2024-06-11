@@ -5,15 +5,6 @@ default_language_version:
   python: python3.8
 
 repos:
-  # general checks (see here: https://pre-commit.com/hooks.html)
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
-    hooks:
-      - id: check-yaml
-        args: [--allow-multiple-documents]
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
-
   # ruff: linting + formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.4.4

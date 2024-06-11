@@ -14,6 +14,6 @@
 .. include:: ../docs/DataFormat.md
 # Contributing
 .. include:: ../docs/contributing.md
-""" # noqa: D205
+"""  # noqa: D205
 
 __all__ = ["local", "tch", "detect", "objects"]

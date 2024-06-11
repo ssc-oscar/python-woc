@@ -1,16 +1,18 @@
 from typing import List, Literal, Tuple, Union
 
-WocObjectsWithContent = Literal['tree', 'blob', 'commit', 'tkns', 'tag', 'bdiff']
+WocObjectsWithContent = Literal["tree", "blob", "commit", "tkns", "tag", "bdiff"]
 """WoC objects stored in stacked binary files."""
 
-WocSupportedProfileVersions = (1, )
+WocSupportedProfileVersions = (1,)
 """Profile versions supported by the current python-woc."""
 
 
 class WocMapsBase:
     def __init__(self, *args, **kwargs):
-        raise NotImplementedError("WocMapsBase is an abstract class, use WoCMapsLocal instead")
-    
+        raise NotImplementedError(
+            "WocMapsBase is an abstract class, use WoCMapsLocal instead"
+        )
+
     def get_values(
         self,
         map_name: str,
@@ -39,14 +41,18 @@ class WocMapsBase:
         self,
         obj_name: WocObjectsWithContent,
         key: Union[bytes, str],
-    ) -> Union[List[Tuple[str, str, str]], str, Tuple[str, Tuple[str, str, str], Tuple[str, str, str], str]]:
+    ) -> Union[
+        List[Tuple[str, str, str]],
+        str,
+        Tuple[str, Tuple[str, str, str], Tuple[str, str, str], str],
+    ]:
         """
         Eqivalent to showCnt in WoC Perl API.
 
         :param obj_name: The name of the object, e.g. 'blob', 'tree', 'commit'
         :param key: The key of the object. It is the SHA-1 hash of the object (in bytes or hex string).
         :return: The content of the object. Can be a list of tuples of strings, a string, or a tuple of strings.
-        
+
         >>> self.show_content('blob', '05fe634ca4c8386349ac519f899145c75fff4169')
         'This is the content of the blob'
         Eqivalent to showCnt in WoC perl API
@@ -60,17 +66,15 @@ class WocMapsBase:
         'News for Sep 5, 2014\\n')
         """
         raise NotImplementedError("WocMapsBase is an abstract class")
-    
-    def count(
-        self, map_name: str
-    ) -> int:
+
+    def count(self, map_name: str) -> int:
         """
         Count the number of keys in a map.
 
         :param map_name: The name of the mapping / object, e.g. 'c2p', 'c2r', 'commit'.
         :return: The number of keys in the tch databases plus the number of large files.
-        
+
         >>> self.count('c2r')
         12345
-        """        
+        """
         raise NotImplementedError("WocMapsBase is an abstract class")

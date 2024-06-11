@@ -3,10 +3,11 @@ from typing import Iterable, List, Tuple, Union
 from .base import WocMapsBase
 
 class WocMapsLocal(WocMapsBase):
-    def __init__(self, 
-            profile_path: Union[str, Iterable[str], None] = None,
-            version: Union[str, Iterable[str], None] = None
-        ) -> None: 
+    def __init__(
+        self,
+        profile_path: Union[str, Iterable[str], None] = None,
+        version: Union[str, Iterable[str], None] = None,
+    ) -> None:
         """
         Initialize local WoC maps with a profile.
 
@@ -16,14 +17,14 @@ class WocMapsLocal(WocMapsBase):
                         **NOT IMPLEMENTED YET**
         """
         ...
-        
+
     def _get_tch_bytes(
         self, map_name: str, key: Union[bytes, str]
-    ) -> Tuple[bytes, str]:
-        ...
-        
+    ) -> Tuple[bytes, str]: ...
     def _get_pos(
-        self, obj_name: str, key: Union[bytes, str],
+        self,
+        obj_name: str,
+        key: Union[bytes, str],
     ) -> Tuple[int, int]:
         """
         Get offset and length of a stacked binary object, currently only support blob.
@@ -43,8 +44,11 @@ def decomp(data: bytes) -> bytes: ...
 def decomp_or_raw(data: bytes) -> bytes: ...
 def get_tch(path: str): ...
 def get_shard(key: bytes, sharding_bits: int, use_fnv_keys: bool) -> int: ...
+
 # def get_from_tch(key: bytes, shards: List[bytes], sharding_bits: int, use_fnv_keys: bool) -> bytes: ...
 def decode_value(value: bytes, out_dtype: str): ...
 def decode_tree(value: bytes) -> List[Tuple[str, str, str]]: ...
-def decode_commit(commit_bin: bytes) -> Tuple[str, Tuple[str, str, str], Tuple[str, str, str], str]: ...
-def decode_str(raw_data: str, encoding='utf-8'): ...
+def decode_commit(
+    commit_bin: bytes,
+) -> Tuple[str, Tuple[str, str, str], Tuple[str, str, str], str]: ...
+def decode_str(raw_data: str, encoding="utf-8"): ...

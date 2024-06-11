@@ -17,7 +17,7 @@ _DAY_Z = datetime.fromtimestamp(0, tz=None)
 def init_woc_objects(woc: WocMapsBase):
     """
     Stores wocMaps object globally so you don't have to pass it around.
-    
+
     :param woc: a wocMaps object.
     """
     global _global_woc
@@ -28,7 +28,7 @@ def init_woc_objects(woc: WocMapsBase):
 def parse_timezone_offset(offset_str: str) -> timezone:
     """
     Parse a timezone offset string in the format '+HHMM' or '-HHMM' into a timezone object.
-    
+
     >>> parse_timezone_offset('+0530')
     timezone(timedelta(seconds=19800))
     """
@@ -689,7 +689,7 @@ class Project(_NamedObject):
     def commits_fp(self) -> Generator["Commit", None, None]:
         """
         Get a commit chain by following only the first parent.
-        
+
         Mimic https://git-scm.com/docs/git-log#git-log---first-parent.
         Thus, you only get a small subset of the full commit tree.
 

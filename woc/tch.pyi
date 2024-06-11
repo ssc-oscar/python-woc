@@ -13,13 +13,11 @@ class TCHashDB:
         """
         ...
 
-    def __iter__(self) -> 'Iterator[bytes]':
-        ...
-
+    def __iter__(self) -> "Iterator[bytes]": ...
     def get(self, key: bytes) -> bytes:
         """
         Get a record.
-        
+
         :raises KeyError: if the key is not found
         :raises OSError: if the operation fails
         """
@@ -28,7 +26,7 @@ class TCHashDB:
     def put(self, key: bytes, value: bytes) -> None:
         """
         Upsert a record.
-        
+
         :raises OSError: if the operation fails
         """
         ...
@@ -36,7 +34,7 @@ class TCHashDB:
     def delete(self, key: bytes) -> None:
         """
         Delete a record from the database.
-        
+
         :raises OSError: if the operation fails
         """
         ...
@@ -44,7 +42,7 @@ class TCHashDB:
     def drop(self) -> None:
         """
         Delete all records in the database.
-        
+
         :raises OSError: if the operation fails
         """
         ...
@@ -52,22 +50,13 @@ class TCHashDB:
     def close(self) -> None:
         """
         Close the database.
-        
+
         :raises OSError: if the operation fails
         """
         ...
 
-    def __getitem__(self, key: bytes) -> bytes:
-        ...
-
-    def __setitem__(self, key: bytes, value: bytes) -> None:
-        ...
-
-    def __delitem__(self, key: bytes) -> None:
-        ...
-
-    def __len__(self) -> int:
-        ...
-
-    def __del__(self) -> None:
-        ...
+    def __getitem__(self, key: bytes) -> bytes: ...
+    def __setitem__(self, key: bytes, value: bytes) -> None: ...
+    def __delitem__(self, key: bytes) -> None: ...
+    def __len__(self) -> int: ...
+    def __del__(self) -> None: ...
