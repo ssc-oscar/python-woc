@@ -132,7 +132,18 @@ def decomp(bytes raw_data):
     start, usize = lzf_length(raw_data)
     # while it is tempting to include liblzf and link statically, there is
     # zero advantage comparing to just using python-lzf
-    return lzf.decompress(raw_data[start:], usize)
+    _ret = lzf.decompress(raw_data[start:], usize)
+    
+    # NOTE: lzf.decompress may return None if it fails
+    # e.g. blob b0c0dca2eca2160ec81ff10bec565c790e6b2e97, version R
+    if _ret is not None:
+        return _ret
+    # This case should be exetremely rare and indicates a corrupted file
+    logging.error(f"Failed to decompress: {len(raw_data) - start} bytes of compressed data "
+                    f"does not fit into {usize} bytes")
+    raise ValueError(f"Failed to decompress: {len(raw_data) - start} bytes of compressed data "
+                    f"does not fit into {usize} bytes")
+    
 
 def decomp_or_raw(bytes raw_data):
     """ Try to decompress raw_data, return raw_data if it fails"""
@@ -156,7 +167,10 @@ def decode_str(bytes raw_data, str encoding='utf-8'):
     except UnicodeDecodeError:
         import chardet  # should be rarely used
         _encoding = chardet.detect(raw_data)['encoding']
-        return raw_data.decode(_encoding, errors='replace')
+        _ret = raw_data.decode(_encoding, errors='replace')
+        if len(_ret) == 0:
+            logging.error(f"Failed to decode: {raw_data[:20]}... with encoding {_encoding}")
+        return _ret
 
 
 ### TCH helpers ###
