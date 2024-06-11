@@ -6,8 +6,6 @@
 
 """
 .. include:: ../README.md
-# QuickStart
-.. include:: ../docs/quickstart.md
 # World of Code Tutorial
 .. include:: ../docs/tutorial.md
 # World of Code DataFormat
