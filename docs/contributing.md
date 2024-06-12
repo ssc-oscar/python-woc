@@ -1,20 +1,9 @@
 
-Starting version 1.3, `oscar` is compiled from Cython, a language closely
-resembling Python but with optional strong typing to improve performance.
-Building Cython packages requires few extra build steps, as explained below.
+## How to Commit
 
-In addition, automation in this project relies on few assumptions which you are
-expected to follow. Below you can find their brief description and the motivation
-behind.
+We follow the standard "fork-and-pull" Git workflow. All the development is done on feature branches, which are then merged to `master` via pull requests. Pull requires are unit tested and linted automatically.
 
-
-## How to contribute
-
-All the development is done on feature branches, which are then merged to `master`
-via pull requests. Every pull request triggers unit testing, every merge triggers
-a release.
-
-To generate release notes, we use `conventional commits <https://www.conventionalcommits.org>`_,
+To generate release notes, we use [conventional commits](https://www.conventionalcommits.org),
 a convention to commit messages. In a nutshell, it means commit messages should
 be prefixed with one of:
 
@@ -39,6 +28,81 @@ be incremented. As a consequence, **you must never change version number manuall
 Not following these procedures might take your pull request extra time to
 review and in some cases will require rewriting the commit history.
 
+## How to ...
+
+### Setup dev environment
+
+To make sure everyone is on the same page, we use [poetry](https://python-poetry.org)
+to manage dependencies and virtual environments. 
+If you don't have it installed yet, please follow the [installation guide](https://python-poetry.org/docs/#installation).
+
+After installing poetry, create an virtual environment and install all dependencies:
+
+```bash
+poetry shell       # activate the virtual environment
+poetry install     # install all dependencies
+```
+
+The `poetry install` command builds `python-woc` from source as well.
+
+### Install pre-commit hooks
+
+Pre-commit hooks ensure that all code is formatted, linted, and tested before pushed to GitHub. 
+This "fail fast, fail early" approach saves time and effort for all of us.
+`
+
+```bash
+pre-commit install # install linter and unit tests to pre-commit hooks
+pre-commit install --hook-type commit-msg  # install the conventional commits checker
+```
+
+### Compile changes to Cython code
+
+```bash
+python3 setup.py
+```
+
+### Lint
+
+```bash
+ruff format        # format all Python code
+ruff check         # lint all Python code
+ruff check --fix   # fix all linting issues
+```
+
+### Test
+
+```bash
+pytest             # run all unit tests
+pytest -k test_name # run a specific test
+pytest --cov       # run all tests and check coverage
+```
+
+### Add or delete a dependency
+
+```bash
+poetry add package_name  # add a new dependency
+# or
+nano pyproject.toml     # add a new dependency manually
+poetry lock --no-update  # update the lock file
+```
+
+```bash
+poetry check --lock
+poetry export -f requirements.txt --with build --output requirements.txt
+```
+
+### Build and publish to PyPI
+
+```bash
+poetry build
+```
+
+### Publish to PyPI
+
+```bash
+poetry publish --build
+```
 
 ## About Cython
 
@@ -71,10 +135,8 @@ of which was previously used).
 ## Compiling and packaging
 
 To compile oscar locally, run:
-`python setup.py build_ext --inplace`. To explicitly specify python version,
-replace `pyhon`, with the appropriate version, e.g. `python2`.
-There shorter alias for this command, `make build`, will always use the default
-Python.
+`python setup.py`. To explicitly specify python version,
+replace `python`, with the appropriate version, e.g. `python3.8`.
 
 If you are building for several Python versions in a row without changing the
 code (e.g. to check if it compiles at all), make sure you clean up first by
@@ -88,7 +150,7 @@ this `.so` just a second ago in this case.
 Packaging is slightly more complicated than just compiling since oscar needs to
 support at least Python 2.7 and 3.6 simultaneously, meaning we need to package
 multiple binaries. Fortunately, `PEP 513 <https://www.python.org/dev/peps/pep-0513/>`_
-offers support for such packages. Building is done via `manylinux <https://github.com/pypa/manylinux>`_,
+offers support for such packages. Building is done via [manylinux](https://github.com/pypa/manylinux),
 a special Docker image, and is automated via GitHub action.
 
 To build package locally,

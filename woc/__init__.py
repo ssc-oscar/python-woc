@@ -5,7 +5,9 @@
 # @date: 2024-01-17
 
 """
+# Quickstart
 .. include:: ../README.md
+:start-after: # python-woc
 # World of Code Tutorial
 .. include:: ../docs/tutorial.md
 # World of Code DataFormat
