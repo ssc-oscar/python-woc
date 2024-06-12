@@ -634,12 +634,6 @@ class WocMapsLocal(WocMapsBase):
             assert _path, f"shard {_shard} not found at {_path}"
 
             _tch = get_tch(_path)
-
-            # TODO: remove bb2cf quirk after fixing tch keys
-            # bb2cf: keys are stored as hex strings in tch db
-            if map_name == 'bb2cf':
-                key = key.hex().encode('ascii')
-
             _bytes = _tch[key]
 
             if self._is_debug_enabled:
