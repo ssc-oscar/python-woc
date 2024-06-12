@@ -1,7 +1,16 @@
-# cython: language_level=3str, wraparound=False, boundscheck=False, nonecheck=False
+# cython: language_level=3str, wraparound=False, boundscheck=False, nonecheck=False, profile=True, linetrace=True
 
-from libc.stdint cimport uint8_t, uint32_t
+cdef extern from 'tchdb.h':
+    ctypedef struct TCHDB:  # type of structure for a hash database
+        pass
 
-cdef uint32_t fnvhash(bytes data)
-cpdef uint8_t get_shard(bytes key, uint8_t sharding_bits, bint use_fnv_keys)
-cpdef bytes get_from_tch(bytes key, list shards, int sharding_bits, bint use_fnv_keys)
+cdef class TCHashDB:
+    cdef TCHDB* _db
+    cdef str filename
+
+    """Object representing a Tokyocabinet Hash table"""
+    cpdef bytes get(self, bytes key)
+    cpdef void put(self, bytes key, bytes value) except *
+    cpdef void delete(self, bytes key) except *
+    cpdef void drop(self) except *
+    cpdef void close(self) except *

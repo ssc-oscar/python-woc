@@ -20,15 +20,19 @@
         "dat": "colon_seperated_data",
         "tch": "compressed_data",
         "bin": "binary_data",
-        "idx": "binary_index"
+        "idx": "binary_index",
+        "bb": "new_blob",
+        "obb": "old_blob",
+        "fb": "first_blob"
     },
     "dtypes": {
         "h": "hex",
-        "s": "string",
-        "cs": "compressed_string",
-        "sh": "string_hex",
+        "s": "str",
+        "cs": "[compressed]str",
+        "sh": "str_hex",
         "hhwww": "hex_hex_url",
-        "cs3": "compressed_3_strings"
+        "r": "hex_berint",
+        "cs3": "[compressed]str_str_str"
     },
     "sites": {
         "bitbucket.org": "bitbucket.org",

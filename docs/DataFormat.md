@@ -1,5 +1,3 @@
-
-
 ## Git objects
 
 ### Sequential access:

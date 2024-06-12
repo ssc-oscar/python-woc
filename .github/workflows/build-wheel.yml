@@ -1,11 +1,12 @@
 name: Run unit tests on every push
 
-on: [push, pull_request]
+on: [push]
 
 jobs:
-  test:
-    name: Python ${{ matrix.python-version }} tests
+  build:
+    name: Build wheels for Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    if: github.ref_name == github.event.repository.default_branch
 
     strategy:
       matrix:
@@ -34,6 +35,17 @@ jobs:
         run: |
           poetry install
 
-      - name: Run tests
+      - name: Build wheels
         run: |
-          poetry run pytest -v
+          poetry build
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v2
+        with:
+          path: dist/*.whl
+
+      - name: Upload source distribution
+        uses: actions/upload-artifact@v2
+        if: matrix.python-version == '3.8'
+        with:
+          path: dist/*.tar.gz
