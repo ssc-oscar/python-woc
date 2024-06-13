@@ -1,0 +1,38 @@
+name: Generate docs
+
+on: [push]
+
+jobs:
+  generate-docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    # only on default branch
+    if: github.ref_name == github.event.repository.default_branch
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install Poetry
+        run: |
+          PIPX_BIN_DIR=/usr/local/bin pipx install poetry
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8"
+          cache: poetry
+          cache-dependency-path: poetry.lock
+
+      - name: Generate docs with pdoc
+        run: |
+          cd docs
+          poetry run pdoc --output-dir . --favicon ./favicon.ico ../woc
+
+      - name: Upload generated docs
+        uses: actions/upload-artifact@v2
+        with:
+          name: docs
+          path: docs/*
