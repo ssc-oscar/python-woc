@@ -26,6 +26,14 @@ jobs:
           cache: poetry
           cache-dependency-path: poetry.lock
 
+      - name: Set Poetry environment
+        run: |
+          poetry env use 3.8
+
+      - name: Install dependencies
+        run: |
+          poetry install
+
       - name: Generate docs with pdoc
         run: |
           cd docs
