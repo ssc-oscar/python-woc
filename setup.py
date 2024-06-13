@@ -43,11 +43,15 @@ ext_modules = [
     ),
 ]
 
+_default_args = ["build_ext", "--inplace"]
+# if no arguments are provided, use the default ones
+if len(os.sys.argv) == 1:
+    os.sys.argv.extend(_default_args)
+
 setup(
     name="python-woc",
     ext_modules=cythonize(ext_modules, emit_linenums=True),
     packages=PACKAGES,
-    package_data={"": ["*.pyx", "*.pxd", "*.pxi"]},
+    package_data={"": ["*.pyx", "*.pxd", "*.pyi"]},
     include_package_data=True,
-    script_args=["build_ext", "--inplace"],
 )
