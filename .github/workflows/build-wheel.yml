@@ -3,49 +3,50 @@ name: Run unit tests on every push
 on: [push]
 
 jobs:
-  build:
-    name: Build wheels for Python ${{ matrix.python-version }}
+  build-wheel:
+    name: Build binary wheels
     runs-on: ubuntu-latest
+    # only on default branch
     if: github.ref_name == github.event.repository.default_branch
-
-    strategy:
-      matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Install Poetry
-        run: |
-          PIPX_BIN_DIR=/usr/local/bin pipx install poetry
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: poetry
-          cache-dependency-path: poetry.lock
-
-      - name: Set Poetry environment
-        run: |
-          poetry env use ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        run: |
-          poetry install
+          fetch-depth: 0
 
       - name: Build wheels
-        run: |
-          poetry build
+        uses: pypa/cibuildwheel@v2.19.1
+        env:
+          CIBW_BUILD: cp3{8,9,10,11}-manylinux_x86_64
+          # force manylinux2014 to avoid compatibility issues on RHEL 7
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+          # install required dependencies： bz2
+          CIBW_BEFORE_ALL: yum install -y bzip2-devel
 
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
-          path: dist/*.whl
+          name: cibw-wheels
+          path: wheelhouse/*.whl
+
+  build-sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    # only on default branch
+    if: github.ref_name == github.event.repository.default_branch
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Build source distribution
+        run: pipx run build --sdist
 
       - name: Upload source distribution
         uses: actions/upload-artifact@v2
-        if: matrix.python-version == '3.8'
         with:
+          name: cibw-sdist
           path: dist/*.tar.gz
