@@ -1,10 +1,10 @@
-name: Run unit tests on every push
+name: Run unit tests
 
 on: [push, pull_request]
 
 jobs:
   test:
-    name: Python ${{ matrix.python-version }} tests
+    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
 
     strategy:

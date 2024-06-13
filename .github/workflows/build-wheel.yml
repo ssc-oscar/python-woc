@@ -1,10 +1,10 @@
-name: Run unit tests on every push
+name: Build wheels
 
 on: [push]
 
 jobs:
   build-wheel:
-    name: Build binary wheels
+    name: Wheel
     runs-on: ubuntu-latest
     # only on default branch
     if: github.ref_name == github.event.repository.default_branch
@@ -27,11 +27,11 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
-          name: cibw-wheels
+          name: wheels
           path: wheelhouse/*.whl
 
   build-sdist:
-    name: Build source distribution
+    name: Sdist
     runs-on: ubuntu-latest
     # only on default branch
     if: github.ref_name == github.event.repository.default_branch
@@ -48,5 +48,5 @@ jobs:
       - name: Upload source distribution
         uses: actions/upload-artifact@v2
         with:
-          name: cibw-sdist
+          name: sdist
           path: dist/*.tar.gz
