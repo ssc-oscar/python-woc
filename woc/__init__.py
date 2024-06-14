@@ -5,15 +5,16 @@
 # @date: 2024-01-17
 
 """
-# Quickstart
+# To Use
 .. include:: ../README.md
-:start-after: # python-woc
+:start-line: 3
+# To Contribute
+.. include:: ../docs/contributing.md
 # World of Code Tutorial
 .. include:: ../docs/tutorial.md
 # World of Code DataFormat
 .. include:: ../docs/DataFormat.md
-# Contributing
-.. include:: ../docs/contributing.md
+
 """  # noqa: D205
 
 __all__ = ["local", "tch", "detect", "objects"]
