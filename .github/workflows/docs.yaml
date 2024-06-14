@@ -38,7 +38,7 @@ jobs:
       - name: Generate docs with pdoc
         run: |
           cd docs
-          poetry run pdoc --output-dir . --favicon ./favicon.ico ../woc
+          poetry run pdoc --output-dir . --favicon /favicon.ico --logo /woc.png ../woc
 
       - name: Upload generated docs
         uses: actions/upload-artifact@v2
