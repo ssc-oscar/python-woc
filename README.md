@@ -1,5 +1,10 @@
 # python-woc
 
+<a href="https://codecov.io/gh/ssc-oscar/python-woc" > <img src="https://codecov.io/gh/ssc-oscar/python-woc/graph/badge.svg?token=WW7XM2YYAU"/> </a>
+<a href="https://github.com/ssc-oscar/python-woc/actions" ><img alt="GitHub Actions Workflow Status" src="https://img.shields.io/github/actions/workflow/status/ssc-oscar/python-woc/test.yml?logo=github"/></a>
+<a href="https://github.com/ssc-oscar/python-woc/commits"><img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/y/ssc-oscar/python-woc?logo=github"/></a>
+<a href="https://github.com/ssc-oscar/python-woc/contributors"><img alt="GitHub contributors" src="https://img.shields.io/github/contributors-anon/ssc-oscar/python-woc?logo=github&color=%23ffd664"/></a>
+
 **python-woc** is the python interface to the World of Code (WoC) data.
 It precedes the [oscar.py](https://ssc-oscar.github.io/oscar.py) project and is hundreds of times faster than the invoking [lookup](https://github.com/ssc-oscar/lookup) scripts via subprocess.
 
