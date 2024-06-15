@@ -7,7 +7,9 @@
 """
 # To Use
 .. include:: ../README.md
-:start-line: 3
+   :start-line: 4
+# To Maintain
+.. include:: ../docs/maintaining.md
 # To Contribute
 .. include:: ../docs/contributing.md
 # World of Code Tutorial
