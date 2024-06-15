@@ -1,5 +1,5 @@
 
-## How to Commit
+## How to commit
 
 We follow the standard "fork-and-pull" Git workflow. All the development is done on feature branches, which are then merged to `master` via pull requests. Pull requires are unit tested and linted automatically.
 
@@ -21,16 +21,11 @@ before the semicolon, or contain **BREAKING CHANGE** in the footer, e.g.:
 
     `feat!: drop support for deprectated parameters`
 
-`fix`, `chore`, `docs` commits will produce patch versions, `feat` will result
-in a minor version bump, and in case of breaking changes the major version will
-be incremented. As a consequence, **you must never change version number manually**.
+Commit hooks will reject commits that do not follow the convention, so you have no choice but to follow the rules :smiling_imp:
 
-Not following these procedures might take your pull request extra time to
-review and in some cases will require rewriting the commit history.
+## Setup development environment
 
-## How to ...
-
-### Setup dev environment
+### Setup Poetry
 
 To make sure everyone is on the same page, we use [poetry](https://python-poetry.org)
 to manage dependencies and virtual environments. 
@@ -49,62 +44,18 @@ The `poetry install` command builds `python-woc` from source as well.
 
 Pre-commit hooks ensure that all code is formatted, linted, and tested before pushed to GitHub. 
 This "fail fast, fail early" approach saves time and effort for all of us.
-`
+
 
 ```bash
-pre-commit install # install linter and unit tests to pre-commit hooks
-pre-commit install --hook-type commit-msg  # install the conventional commits checker
-```
-
-### Compile changes to Cython code
-
-```bash
-python3 setup.py
-```
-
-### Lint
-
-```bash
-ruff format        # format all Python code
-ruff check         # lint all Python code
-ruff check --fix   # fix all linting issues
-```
-
-### Test
-
-```bash
-pytest             # run all unit tests
-pytest -k test_name # run a specific test
-pytest --cov       # run all tests and check coverage
-```
-
-### Add or delete a dependency
-
-```bash
-poetry add package_name  # add a new dependency
-# or
-nano pyproject.toml     # add a new dependency manually
-poetry lock --no-update  # update the lock file
-```
-
-```bash
-poetry check --lock
-poetry export -f requirements.txt --with build --output requirements.txt
-```
-
-### Build and publish to PyPI
-
-```bash
-poetry build
-```
-
-### Publish to PyPI
-
-```bash
-poetry publish --build
+# install linter and unit tests to pre-commit hooks
+pre-commit install 
+# install the conventional commits checker
+pre-commit install --hook-type commit-msg  
 ```
 
 ## About Cython
+
+(Notes from the original maintainer, @moo-ack)
 
 The reason to use Cython was primarily Python 3 support. WoC data is stored
 in tokyocabinet (.tch) files, note natively supported by Python.
@@ -118,7 +69,7 @@ is hardly considered. So, our options to interface `libtokyocabinet` were:
 - C extension, adapting existing `python-tokyocabinet` code for Python 3.
   It is rather hard to support and even harder to debug; a single
   attempt was scrapped after making a silently failing extension.
-- `SWIG <http://swig.org>`_ (and its successor, `CLIF <https://github.com/google/clif>`_),
+- [SWIG](http://swig.org)(and its successor, [CLIF](https://github.com/google/clif)),
   a Google project to generate C/C++ library bindings
   for pretty much any language. Since this library provides 1:1 interface
   to the library methods, Python clients had to be aware of the returned
@@ -132,95 +83,105 @@ Cython came a clear winner in this comparison, also helping to speed up
 some utility functions along the way (e.g. `fnvhash`, a pure Python version
 of which was previously used).
 
-## Compiling and packaging
+## Compile changes to Cython code
 
-To compile oscar locally, run:
-`python setup.py`. To explicitly specify python version,
-replace `python`, with the appropriate version, e.g. `python3.8`.
+Cython code is not interpreted; it needs to be compiled to C and then to a shared object file. If you made any changes to `.pyx` or `.pxd` files, you need to recompile:
 
-If you are building for several Python versions in a row without changing the
-code (e.g. to check if it compiles at all), make sure you clean up first by
-running `make clean`.
-Compilation is cached when possible, and will be omitted if the input hasn't
-changed - the compiler is not aware that the resulting `.so` file exposes
-different interfaces. You will get a lot of angry messages about missing
-interfaces and symbols when import with the same Python version which "compiled"
-this `.so` just a second ago in this case.
-
-Packaging is slightly more complicated than just compiling since oscar needs to
-support at least Python 2.7 and 3.6 simultaneously, meaning we need to package
-multiple binaries. Fortunately, `PEP 513 <https://www.python.org/dev/peps/pep-0513/>`_
-offers support for such packages. Building is done via [manylinux](https://github.com/pypa/manylinux),
-a special Docker image, and is automated via GitHub action.
-
-To build package locally,
-
-- clone the corresponding GitHub action repository,
-   `git clone git@github.com:user2589/python-wheels-manylinux-build.git`,
-- check out the desired tag if necessary, e.g. `git checkout v0.3.4`
-- build Docker image: `docker build -t python-wheels-manylinux-build .`
-- run the image: `make build_manylinux`
-
-
-## Testing
-
-Every push to oscar repository is automatically tested; on top, you might want
-to test locally before making a commit to avoid awkward followup fixes and a
-bunch of angry emails from GitHub actions bot telling how you broke the build.
-Unit tests are tedious to write, but will save a lot of your time in the long run.
-First thing to know about  unit tests, please DO write them - future you will be
-grateful. Second, there are a couple things about testing Cython code against a
-remote dataset.
-
-To run tests locally, `make test_local`.
-WoC files are only available on UTK servers only, so to make local testing
-possible, there is a small subset of the data in `tests/fixtures`. Changing
-oscar paths to point at these fixtures requires setting some environment
-variables, stored in `tests/local_test.env`.
-To tests locally,
-
-- set environment variables, `source tests/local_test.env`
-- clean up previously compiled binaries to avoid Py2/3 compatibility issues: `make clean`
-- run the test script: `PYTHONPATH=. python tests/unit_test.py`.
-   Don't forget to replace `python` with a specific version if testing
-   against non-default Python)
-
-`make test_local` is a shortcut for this, except it will always use the default
-Python and thus doesn't need to clean.
-
-Unit tests for Cython functions (i.e., defined with `cdef`) are stored in a
-separate `.pyx` file, which is imported from the regular `.py` test suite.
-Cython code can only be accessed from Cython files, which cannot executed as a
-Python script. Thus, we have to store them separately - see `tests/unit_test.py`
-and `tests/unit_test_cy.pyx` as an example of how it is organized.
-
-To avoid manual compilation with `cythonize`, Cython tests are compiled with
-`pyximport`, an in-place JIT compiler. Thus, at the beginning of every test suite,
-install `pyximport`:
-
-```python
-import pyximport
-pyximport.install(
-    # build_dir='build',
-    setup_args={"script_args": ["--force"]},
-    inplace=True,
-    language_level='3str'
-)
+```bash
+python3 setup.py
 ```
 
-To tell `pyximport` where to find sources and libraries for the main module,
-there is a special file `oscar.pyxbld`. It is important to keep it consistent
-with the `Extension` parameters in `setup.py`. If you can `make build` but unit
-tests fail to compile it, this is the first place to check.
+Cython requires a functioning GNU toolchain. And sometimes ld complains it can not find `-lbz2`, and you need to install `bzip2-devel` package on CentOS or `libbz2-dev` on Ubuntu.
 
-Cython functions being tested should be exposed in `oscar.pxd` -
-a Cython equivalent of a header file. If tests cannot find some function that is
-defined in oscar, check it is included there. Hopefully, the list of tested
-functions will grow bigger with your help.
+## Lint
 
-Finally, unit and integration tests can also be run on real data. On one of UTK
-servers (preferably, `da4`), clone the repository and run `make test`. If the
-result is different from your local run, perhaps it's time to update fixtures
-and/or tests.
+We use [ruff](https://github.com/astral-sh/ruff) as the one and only linter and formatter. Being in Rust, it is blazingly fast and perfect for commit hooks and CI. The pre-commit hooks already include the following:
 
+```bash
+ruff format        # format all Python code
+ruff check         # lint all Python code
+ruff check --fix   # fix all linting issues
+```
 
+But ruff's fix feature is very cautious: sometimes it refuse to perform "unsafe" changes, and yields an error when you commit. In this case, we recommend installing the [ruff VSCode integration](https://marketplace.visualstudio.com/items?itemName=charliermarsh.ruff), double check the suggested changes, and apply them manually.
+
+## Test
+
+### Run tests
+
+python-woc use pytest to run unit tests, and pytest-cov to check coverage. To run tests:
+
+```bash
+pytest              # run all unit tests
+pytest -k test_name # run a specific test
+pytest --cov        # run all tests and check coverage
+```
+
+### Add a new test case
+
+Test cases are located at `tests/` directory. To add a new test case, create a new file with the name `test_*.py`, like the following:
+
+```python
+# tests/test_my_new_feature.py
+def test_my_new_feature():
+    assert 1 == 1
+```
+
+### Add a new fixture
+
+Some may claim that the binary fixtures is good enough for testing, but we prefer to incorporate generation scripts into the test suite. To add a new fixture, add a line to `tests/fixtures/create_fixtures.py`:
+
+```python
+cp.copy_content("tree", "51968a7a4e67fd2696ffd5ccc041560a4d804f5d")
+```
+
+Run `create_fixtures.py` on a server with WoC datasets, generate a profile at `./wocprofile.json`, and the following at the project root:
+
+```bash
+PYTHONPATH=. python3 tests/fixtures/create_fixtures.py
+```
+
+## Manage Dependencies
+
+Managing dependencies is not hard with poetry. To add a new dependency, run:
+
+```bash
+poetry add package_name  # add a new dependency
+```
+
+Sometimes tasks are easier to perform to edit the manifest file directly, e.g. add a new dependency to a specific group. You need to update the lockfile manually or poetry gets angry on install:
+
+```bash
+nano pyproject.toml      # add a new dependency manually
+poetry lock --no-update  # update the lock file
+```
+
+Poetry is heavy to install and setup. To make it easier for manual installation, we keep a `requirements.txt` file. You will need to update it after modifying dependencies:
+
+```bash
+poetry check --lock
+poetry export -f requirements.txt --with build --output requirements.txt
+```
+
+## Build wheels
+
+Actually the easiest way to build manylinux wheels is to run the GitHub action locally, with [act](https://github.com/nektos/act). (Note that write permission to docker socket is required) You will get the exact same wheels as the CI produces:
+
+```bash
+act -j 'build-wheel' --artifact-server-path build
+cd build/1/wheels/
+# Somehow artifacts are gzipped, and we need to unzip them
+for f in *.gz__; do mv "$f" "${f%__}"; gzip -d "${f%__}"; done
+```
+
+Note that even `poetry build` does produce manylinux wheels, its compatibility level is not guaranteed. To ensure the wheels are compatible with CentOS 7, we fix the level to manylinux2014.
+
+## Bump version
+
+You don't have to, and please do not change version number manually. Use poetry to bump the version number:
+
+```bash
+poetry version patch  # or minor, or major, or pre-release
+```
+
+For the full usage, please refer to the [poetry documentation](https://python-poetry.org/docs/cli/#version).
