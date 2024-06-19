@@ -5,6 +5,29 @@
 **python-woc** is the python interface to the World of Code (WoC) data.
 It precedes the [oscar.py](https://ssc-oscar.github.io/oscar.py) project and is hundreds of times faster than the invoking [lookup](https://github.com/ssc-oscar/lookup) scripts via subprocess.
 
+## What mappings and objects are supported?
+
+Note that python-woc does not support all data types in WoC. It has built-in readers for:
+
+- Tokyo Cabinet hash databases (`.tch` files)
+- Stacked Binary files (`.bin` files)
+
+Gzipped files (`.s/.gz`, e.g. `PYthruMaps/c2bPtaPkgOPY.0.gz`) are not supported yet, because currently it makes no sense to manipulate them natively in Python. Instead, you should refer to [WoC tutorial](https://github.com/woc-hack/tutorial?tab=readme-ov-file#activity-3---investigate-the-maps) and decompress them into a pipe, and deal them with command line utilities.
+
+Mappings below are supported by both `woc.get_values` and `woc.objects`:
+
+```python
+['A2P', 'A2a', 'A2b', 'A2c', 'A2f', 'A2fb', 'P2A', 'P2a', 'P2c', 'P2p', 'a2A', 'a2P', 'a2b', 'a2c', 'a2f', 'a2p', 'b2P', 'b2c', 'b2f', 'b2fa', 'b2tac', 'bb2cf', 'c2P', 'c2b', 'c2cc', 'c2dat', 'c2f', 'c2fbb', 'c2h', 'c2p', 'c2pc', 'c2r', 'c2ta', 'f2a', 'f2b', 'f2c', 'obb2cf', 'p2P', 'p2a', 'p2c']
+```
+
+And objects:
+
+```python
+['commit', 'tree', 'blob']
+```
+
+If you are still unsure what characters in the mappings mean, checkout the [WoC Tutorial](https://github.com/woc-hack/tutorial?tab=readme-ov-file#activity-3---investigate-the-maps).
+
 ## Requirements
 
 - Linux with a GNU toolchain (only tested on x86_64, Ubuntu / CentOS)
@@ -106,6 +129,15 @@ Use `show_content` to get the content of a blob, a commit, or a tree:
 
 Note that the function yields different types for different maps. Please refer to the [documentation](https://ssc-oscar.github.io/python-woc) for details.
 
+Sometimes you may want to know the exact size of WoC, doing so is easy and quick with `count`:
+
+```python
+>>> woc.count("blob")  # count the number of blobs
+17334020520
+>>> woc.count("A2P")  # count the number of unique authors
+44613280
+```
+
 ## Use Python Objects API
 
 The objects API provides a more intuitive way to access the WoC data. 
@@ -132,3 +164,7 @@ Tree(836f04d5b374033b1608269e2f3aaabae263a0db)
 ```
 
 For more, check `woc.objects` in the documentation.
+
+## Contributing
+
+We welcome awesome contributions from the community. If you are motivated to add new features or fix bugs, please refer to the [contributing guide](https://ssc-oscar.github.io/python-woc/woc.html#to-contribute).

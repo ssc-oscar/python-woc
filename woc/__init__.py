@@ -8,8 +8,7 @@
 # To Use
 .. include:: ../README.md
    :start-line: 4
-# To Maintain
-.. include:: ../docs/maintaining.md
+   :end-before: ## Contributing
 # To Contribute
 .. include:: ../docs/contributing.md
 # World of Code Tutorial

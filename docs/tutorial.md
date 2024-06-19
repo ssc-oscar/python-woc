@@ -1,3 +1,6 @@
+> [!NOTE]
+> This tutorial is obsolete and will be removed soon. Please refer to the [tutorial in woc-hack](https://github.com/woc-hack/tutorial) for the most up-to-date information.
+
 ## List of relevant directories
 ### da0 Server
 #### `<relationship>.{0-31}.tch` files in `/data/basemaps/`:  

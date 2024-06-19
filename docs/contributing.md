@@ -21,7 +21,7 @@ before the semicolon, or contain **BREAKING CHANGE** in the footer, e.g.:
 
     `feat!: drop support for deprectated parameters`
 
-Commit hooks will reject commits that do not follow the convention, so you have no choice but to follow the rules :smiling_imp:
+Commit hooks will reject commits that do not follow the convention, so you have no choice but to follow the rules 😈
 
 ## Setup development environment
 
@@ -141,7 +141,7 @@ Run `create_fixtures.py` on a server with WoC datasets, generate a profile at `.
 PYTHONPATH=. python3 tests/fixtures/create_fixtures.py
 ```
 
-## Manage Dependencies
+## Manage dependencies
 
 Managing dependencies is not hard with poetry. To add a new dependency, run:
 
@@ -163,6 +163,16 @@ poetry check --lock
 poetry export -f requirements.txt --with build --output requirements.txt
 ```
 
+## Test GitHub actions locally
+
+It's always a good idea to test your code before commit to avoid fixups polluting the commit history. You can run the GitHub actions locally with [act](https://github.com/nektos/act) to see if it works as expected:
+
+```bash
+act -j 'test' -s CODECOV_TOKEN  # run unit tests
+act -j 'build-and-publish' --artifact-server-path build  # run the wheel builder
+act -j 'docs' -s GITHUB_TOKEN  # run the documentation generator
+```
+
 ## Build wheels
 
 Actually the easiest way to build manylinux wheels is to run the GitHub action locally, with [act](https://github.com/nektos/act). (Note that write permission to docker socket is required) You will get the exact same wheels as the CI produces:
@@ -172,6 +182,8 @@ act -j 'build-wheel' --artifact-server-path build
 cd build/1/wheels/
 # Somehow artifacts are gzipped, and we need to unzip them
 for f in *.gz__; do mv "$f" "${f%__}"; gzip -d "${f%__}"; done
+# move them to dist/
+mv *.whl ../../../dist/
 ```
 
 Note that even `poetry build` does produce manylinux wheels, its compatibility level is not guaranteed. To ensure the wheels are compatible with CentOS 7, we fix the level to manylinux2014.
@@ -185,3 +197,42 @@ poetry version patch  # or minor, or major, or pre-release
 ```
 
 For the full usage, please refer to the [poetry documentation](https://python-poetry.org/docs/cli/#version).
+
+## Add new mappings to python-woc
+
+### `woc.get_values`
+
+We don't hard code how to encode and decode each one of the mappings. Instead, we follow the practice of the original [World of Code perl driver](https://github.com/ssc-oscar/lookup/blob/7289885/getValues.perl#L34) and define the following datatypes:
+
+```json
+{
+  "h": "hex",
+  "s": "str",
+  "cs": "[compressed]str",
+  "sh": "str_hex",
+  "hhwww": "hex_hex_url",
+  "r": "hex_berint",
+  "cs3": "[compressed]str_str_str"
+}
+```
+
+`woc.detect` should be able to recognize the new mappings if they follow the current naming scheme. To get `get_values` working, you may add a new line to `woc/detect.py` and regenerate the profile, or modify the following field in `wocprofile.json`:
+
+```json
+"dtypes": [
+  "h",  // Input dtype
+  "cs3"  // Output dtype
+]
+```
+
+### `woc.show_content`
+
+`woc.show_content` is a bit tricky, and we have to implement the encoders and decoders separately. To add another git object, please refer to existing implementations in `woc/local.pyx`.
+
+### `woc.objects`
+
+The implementation of the object API is in pure python, at `woc/objects.py`.
+ A new object class need to be a subclass of one of the following:
+
+- `_GitObject`: A hash-indexed Git object, e.g. commit, tree, blob
+- `_NamedObject`: A named object indexed by its fnv hash, e.g. author, project
