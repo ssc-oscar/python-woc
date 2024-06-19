@@ -21,7 +21,7 @@ jobs:
     name: docs
     runs-on: ubuntu-latest
     # only on default branch
-    if: github.ref_name == github.event.repository.default_branch
+    if:  ${{ github.ref_name == github.event.repository.default_branch || github.event_name == 'workflow_dispatch' }}
 
     steps:
       - name: Checkout
@@ -48,6 +48,7 @@ jobs:
         run: |
           poetry install
 
+      # Not elegant, but pdoc can't handle assets paths gracefully
       - name: Generate docs with pdoc
         run: |
           cd docs
