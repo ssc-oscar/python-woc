@@ -50,11 +50,9 @@ jobs:
 
       - name: Upload to Codecov
         if : ${{ github.event_name == 'push' && github.ref == github.event.repository.default_branch && matrix.python-version == '3.8' || github.event_name == 'workflow_dispatch' }}
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v3
         with:
-          env_vars: OS,PYTHON
-          fail_ci_if_error: false
-          files: ./coverage.xml
-          name: python-woc
           token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          files: coverage.info
           verbose: true
