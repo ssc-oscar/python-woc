@@ -186,3 +186,12 @@ def test_cli_p2c():
     )
     actual_output = run_get_values(input_str, "p2c")
     assert actual_output[1].startswith(expected_output_start), actual_output
+
+
+def test_cli_b2tac():
+    input_str = "05fe634ca4c8386349ac519f899145c75fff4169"
+    expected_output_end = (
+        "Audris Mockus <audris@utk.edu>;e4af89166a17785c1d741b8b1d5775f3223f510f"
+    )
+    actual_output = run_get_values(input_str, "b2tac")
+    assert actual_output[1].endswith(expected_output_end), actual_output

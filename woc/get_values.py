@@ -9,7 +9,11 @@ from typing import Iterable
 from .local import WocMapsLocal
 
 
-def format_map(key: str, map_objs: Iterable) -> str:
+def format_map(key: str, map_objs: Iterable, level=1) -> str:
+    # flatten the nested list
+    while level > 1:
+        map_objs = [item for sublist in map_objs for item in sublist]
+        level -= 1
     return key + ";" + ";".join(map(str, map_objs))
 
 
@@ -30,11 +34,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     woc = WocMapsLocal(args.profile, args.version)
+    _level = 1
+    if args.type == "b2tac":
+        _level = 2
     for line in sys.stdin:
         try:
             key = line.strip()
             obj = woc.get_values(args.type, key)
-            print(format_map(key, obj))
+            print(format_map(key, obj, _level))
         except BrokenPipeError:
             # ref: https://docs.python.org/3/library/signal.html#note-on-sigpipe
             devnull = os.open(os.devnull, os.O_WRONLY)
