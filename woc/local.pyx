@@ -567,6 +567,23 @@ class WocMapsLocal(WocMapsBase):
                                     "Unsupported wocprofile version: {}".format(self.config["wocSchemaVersion"])
         assert self.config["maps"], "Run `python3 -m woc.detect` to scan data files and generate wocprofile.json"
 
+        # filter versions
+        if version is not None:
+            if isinstance(version, str):
+                version = (version, )
+            _keys_to_drop = []
+            for _k, _v in self.config["maps"].items():
+                _selected = []
+                for _vv in _v:
+                    if _vv["version"] in version:
+                        _selected.append(_vv)
+                if not _selected:
+                    _keys_to_drop.append(_k)
+                else:
+                    self.config["maps"][_k] = _selected
+            for _k in _keys_to_drop:
+                del self.config["maps"][_k]
+
         # store name of maps and objects
         self.maps = set(self.config["maps"].keys())
         self.objects = set(self.config["objects"].keys())
