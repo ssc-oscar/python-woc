@@ -100,7 +100,7 @@ With a `wocprofile.json`, you can create a `WocMapsLocal` object and access the 
 
 ```python
 >>> from woc.local import WocMapsLocal
->>> woc = WocMapsLocal()
+>>> woc = WocMapsLocal()  # or use only the version R: woc = WocMapsLocal(version="R")
 >>> woc.maps
 {'p2c', 'a2b', 'c2ta', 'a2c', 'c2h', 'b2tac', 'a2p', 'a2f', 'c2pc', 'c2dat', 'b2c', 'P2p', 'P2c', 'c2b', 'f2b', 'b2f', 'c2p', 'P2A', 'b2fa', 'c2f', 'p2P', 'f2a', 'p2a', 'c2cc', 'f2c', 'c2r', 'b2P'}
 ```

@@ -32,6 +32,13 @@ def test_b2tac(woc):
     )
 
 
+def test_b2tac_vererr(woc):
+    _test_pr = os.path.join(os.path.dirname(__file__), "test_profile.json")
+    woc_r = WocMapsLocal(_test_pr, version="R")
+    with pytest.raises(KeyError):
+        woc_r.get_values("b2tac", "05fe634ca4c8386349ac519f899145c75fff4169")
+
+
 def test_p2a(woc):
     res = woc.get_values("p2a", "ArtiiQ_PocketMine-MP")
     assert res[0] == "0929hitoshi <kimurahitoshi0929@yahoo.co.jp>"

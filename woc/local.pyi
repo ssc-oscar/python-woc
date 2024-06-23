@@ -14,7 +14,7 @@ class WocMapsLocal(WocMapsBase):
         :param profile_path: path to the woc profile.
                              if not provided, use `./wocprofile.json`, `~/.wocprofile.json`, `/etc/wocprofile.json`.
         :param version: version of the profile, default to the latest version.
-                        **NOT IMPLEMENTED YET**
+                        can be a single version like 'R' or a list of versions like ['R', 'U'].
         """
         ...
 

@@ -24,9 +24,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "-p", "--profile", type=str, help="The path to the profile file", default=None
     )
+    parser.add_argument(
+        "-v", "--version", type=str, help="The version of the profile", default=None
+    )
     args = parser.parse_args()
 
-    woc = WocMapsLocal(args.profile)
+    woc = WocMapsLocal(args.profile, args.version)
     for line in sys.stdin:
         try:
             key = line.strip()
