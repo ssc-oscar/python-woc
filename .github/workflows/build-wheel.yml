@@ -2,8 +2,10 @@ name: Build wheels and publish
 
 on: 
   push:
-    tags:
-      - 'v*'  # push tags to trigger the workflow
+    paths:
+      # only build wheels when the package code changes
+      - 'woc/**'
+      - 'setup.py'
   workflow_dispatch:
 
 # Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
@@ -17,6 +19,7 @@ jobs:
     name: wheels
     runs-on: ubuntu-latest
     # trigger the workflow only on default branch, or manually
+    if: ${{ github.event_name == 'workflow_dispatch' || github.ref_name == github.event.repository.default_branch }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -41,6 +44,8 @@ jobs:
   build-sdist:
     name: sdist
     runs-on: ubuntu-latest
+    # trigger the workflow only on default branch, or manually
+    if: ${{ github.event_name == 'workflow_dispatch' || github.ref_name == github.event.repository.default_branch }}
 
     steps:
       - name: Checkout
@@ -56,35 +61,3 @@ jobs:
         with:
           name: sdist
           path: dist/*.tar.gz
-
-
-  publish:
-    name: publish
-    runs-on: ubuntu-latest
-    needs: [build-wheel, build-sdist]
-    permissions:
-      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
-
-      - name: Download wheels
-        uses: actions/download-artifact@v2
-        with:
-          path: dist
-
-      - name: Download sdist
-        uses: actions/download-artifact@v2
-        with:
-          path: dist
-
-      - name: Move everything to dist
-        run: |
-          mv dist/wheels/*.whl dist
-          mv dist/sdist/*.tar.gz dist
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
