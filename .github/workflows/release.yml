@@ -6,8 +6,6 @@ on:
       # only build wheels when the package code changes
       - 'woc/**'
       - 'setup.py'
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
 
 # Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
