@@ -198,6 +198,19 @@ poetry version patch  # or minor, or major, or pre-release
 
 For the full usage, please refer to the [poetry documentation](https://python-poetry.org/docs/cli/#version).
 
+## Publish a new version to GitHub and PyPI
+
+Super easy:
+
+```bash
+git tag vX.Y.Z
+git push --tags
+```
+
+The GitHub action will automatically build and publish the wheels to PyPI. You can check the status of the build in the [Actions tab](https://github.com/ssc-oscar/python-woc/actions).
+
+The pipeline also drafts GitHub releases. Navigate to the [Releases tab](https://github.com/ssc-oscar/python-woc/releases) to edit the release notes and publish the release.
+
 ## Add new mappings to python-woc
 
 ### `woc.get_values`
