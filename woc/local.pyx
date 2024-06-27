@@ -535,7 +535,8 @@ def read_large(path: str, dtype: str) -> bytes:
 class WocMapsLocal(WocMapsBase):
     def __init__(self,
             profile_path: Union[str, Iterable[str], None] = None,
-            version: Union[str, Iterable[str], None] = None
+            version: Union[str, Iterable[str], None] = None,
+            exclude_larges: bool = False
         ) -> None:
         # init logger
         self._logger = logging.getLogger(__name__)
@@ -583,6 +584,13 @@ class WocMapsLocal(WocMapsBase):
                     self.config["maps"][_k] = _selected
             for _k in _keys_to_drop:
                 del self.config["maps"][_k]
+
+        # exclude larges
+        if exclude_larges:
+            for _k in self.config["maps"].keys():
+                for _item in self.config["maps"][_k]:
+                    if "larges" in _item:
+                        del _item["larges"]
 
         # store name of maps and objects
         self.maps = set(self.config["maps"].keys())

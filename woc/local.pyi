@@ -7,6 +7,7 @@ class WocMapsLocal(WocMapsBase):
         self,
         profile_path: Union[str, Iterable[str], None] = None,
         version: Union[str, Iterable[str], None] = None,
+        exclude_larges: bool = False,
     ) -> None:
         """
         Initialize local WoC maps with a profile.
@@ -15,6 +16,7 @@ class WocMapsLocal(WocMapsBase):
                              if not provided, use `./wocprofile.json`, `~/.wocprofile.json`, `/etc/wocprofile.json`.
         :param version: version of the profile, default to the latest version.
                         can be a single version like 'R' or a list of versions like ['R', 'U'].
+        :param exclude_larges: exclude large maps from the profile. This is useful when you don't care about files or commits appear everywhere.
         """
         ...
 

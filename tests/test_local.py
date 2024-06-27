@@ -1,3 +1,4 @@
+import json
 import os
 
 import pytest
@@ -139,3 +140,11 @@ def test_version(woc):
     assert woc_u.maps == {"b2fa", "c2p", "c2dat", "b2tac"}
     woc_r = WocMapsLocal(_test_pr, version=["R"])
     assert len(woc_u.maps) + len(woc_r.maps) == len(woc.maps)
+
+
+def test_exclude_larges(woc):
+    _test_pr = os.path.join(os.path.dirname(__file__), "test_profile.json")
+    woc_nolarge = WocMapsLocal(_test_pr, exclude_larges=True)
+    assert "larges" not in json.dumps(woc_nolarge.config["maps"]), json.dumps(
+        woc_nolarge.config["maps"]
+    )
