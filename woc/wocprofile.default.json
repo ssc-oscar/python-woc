@@ -35,7 +35,9 @@
         "cs3": "[compressed]str_str_str"
     },
     "sites": {
+        "bb": "bitbucket.org",
         "bitbucket.org": "bitbucket.org",
+        "gl": "gitlab.com",
         "gitlab.com": "gitlab.com",
         "android.googlesource.com": "android.googlesource.com",
         "bioconductor.org": "bioconductor.org",

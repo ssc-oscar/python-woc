@@ -245,6 +245,13 @@ def test_project_url(woc):
     assert project.url == "https://git.code.sf.net/p/peazip"
     project = Project("gitlab.com_openRGB_openRGB")
     assert project.url == "https://gitlab.com/openRGB/openRGB"
+    project = Project("chromium.googlesource.com_chromiumos_platform/factory")
+    assert project.url == "https://chromium.googlesource.com/chromiumos/platform/factory"
+    project = Project("greicekcgm_greice_kelli_cristan_goncalves_mota_jamstackalura")
+    assert (
+        project.url
+        == "https://github.com/greicekcgm/greice_kelli_cristan_goncalves_mota_jamstackalura"
+    )
 
 
 def test_project_head(woc):

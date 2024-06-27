@@ -588,6 +588,9 @@ class Project(_NamedObject):
         elif prefix in URL_PREFIXES and "_" in body:
             platform = URL_PREFIXES[prefix]
             body = body.replace("_", "/", 1)
+        elif "." in prefix:
+            platform = prefix
+            body = body.replace("_", "/", 1)
         else:
             platform = "github.com"
             body = self.key.replace("_", "/", 1)
