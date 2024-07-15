@@ -19,7 +19,7 @@ try:
 except ImportError or AssertionError:
     raise ImportError('python-lzf is required to decompress LZF-compressed data: `pip install python-lzf`')
 
-from .base import WocMapsBase, WocObjectsWithContent, WocSupportedProfileVersions
+from .base import WocMapsBase,WocFile,WocMap, WocObject, WocSupportedProfileVersions
 from .tch cimport TCHashDB
 
 cdef extern from 'Python.h':
@@ -568,33 +568,63 @@ class WocMapsLocal(WocMapsBase):
                                     "Unsupported wocprofile version: {}".format(self.config["wocSchemaVersion"])
         assert self.config["maps"], "Run `python3 -m woc.detect` to scan data files and generate wocprofile.json"
 
+        # read profile
+        self.maps = []
+        self.objects = []
+
+        def _get_fobj(_in: Union[str, Dict[str, str]]) -> Optional[WocFile]:
+            if _in is None:
+                return None
+            if isinstance(_in, str):
+                return WocFile(path=_in)
+            return WocFile(**_in)
+        
+        for _k, _lm in self.config["maps"].items():
+            for _m in _lm:
+                self.maps.append(WocMap(
+                    name=_k,
+                    version=_m["version"],
+                    sharding_bits=_m["sharding_bits"],
+                    shards=list(map(_get_fobj, _m["shards"])),
+                    larges={k: _get_fobj(v) for k, v in _m.get("larges", {}).items()},
+                    dtypes=_m["dtypes"],
+                ))
+
+        for _k, _o in self.config["objects"].items():
+            self.objects.append(WocObject(
+                name=_k,
+                shards=list(map(_get_fobj, _o["shards"])),
+                sharding_bits=_o["sharding_bits"],
+            ))
+
         # filter versions
         if version is not None:
             if isinstance(version, str):
                 version = (version, )
-            _keys_to_drop = []
-            for _k, _v in self.config["maps"].items():
-                _selected = []
-                for _vv in _v:
-                    if _vv["version"] in version:
-                        _selected.append(_vv)
-                if not _selected:
-                    _keys_to_drop.append(_k)
-                else:
-                    self.config["maps"][_k] = _selected
-            for _k in _keys_to_drop:
-                del self.config["maps"][_k]
+            self.maps = list(filter(lambda x: x.version in version, self.maps))
 
         # exclude larges
         if exclude_larges:
-            for _k in self.config["maps"].keys():
-                for _item in self.config["maps"][_k]:
-                    if "larges" in _item:
-                        del _item["larges"]
+            for _m in self.maps:
+                _m.larges = {}
 
-        # store name of maps and objects
-        self.maps = set(self.config["maps"].keys())
-        self.objects = set(self.config["objects"].keys())
+        # build lookup map
+        self._lookup: Dict[str, Union[WocObject, WocMap]] = {}
+        for _m in self.maps:
+            # Pick the first one if there are multiple versions
+            # Python 3.6+ preserves insertion order, so we don't need to sort
+            if _m.name in self._lookup:
+                continue
+            self._lookup[_m.name] = _m
+        for _o in self.objects:
+            self._lookup[_o.name] = _o
+            # add aliases
+            if _o.name == 'tree.tch':
+                self._lookup['tree'] = _o
+            elif _o.name == 'commit.tch':
+                self._lookup['commit'] = _o
+            elif _o.name == 'sha1.blob.tch':
+                self._lookup['blob'] = _o
 
     def _get_tch_bytes(
         self, map_name, key
@@ -602,25 +632,16 @@ class WocMapsLocal(WocMapsBase):
         """
         Get value (in bytes) from tch maps, return bytes and dtype
         """
-        # translate obj_name to map_name
-        if map_name == 'tree':
-            map_name = 'tree.tch'
-        elif map_name == 'commit':
-            map_name = 'commit.tch'
-        elif map_name == 'blob':
-            map_name = 'sha1.blob.tch'
-
-        # find dtype object
-        if map_name in self.maps:
-            _map = self.config["maps"][map_name][0]
-        elif map_name in self.objects:
-            _map = self.config["objects"][map_name]
-        else:
+        try:
+            _map: WocMap | WocObject  = self._lookup[map_name]
+        except KeyError:
             raise KeyError(f'Invalid map name: {map_name}, '
-                f'expected one of {", ".join(self.maps | self.objects)}')
+                f'expected one of {", ".join(self._lookup.keys())}')
 
-        in_dtype = _map["dtypes"][0] if "dtypes" in _map else "h"
-        out_dtype = _map["dtypes"][1] if "dtypes" in _map else "c?"  # c? means maybe compressed
+        if hasattr(_map, "dtypes"):
+            in_dtype, out_dtype = _map.dtypes
+        else:
+            in_dtype, out_dtype = 'h', 'c?'
 
         if self._is_debug_enabled:
             start_time = time.time_ns()
@@ -641,8 +662,8 @@ class WocMapsLocal(WocMapsBase):
             self._logger.debug(f"hash: hex={hex_str} in {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
 
-        if "larges" in _map and hex_str in _map["larges"]:
-            _bytes = read_large(_map["larges"][hex_str], out_dtype)
+        if hasattr(_map, "larges") and hex_str in _map.larges:
+            _bytes = read_large(_map.larges[hex_str].path, out_dtype)
 
             if self._is_debug_enabled:
                 self._logger.debug(f"read large: file={_map['larges'][hex_str]} "
@@ -654,15 +675,15 @@ class WocMapsLocal(WocMapsBase):
                 out_dtype = 's'
         else:
             # use fnv hash as shading idx if key is not a git sha
-            _shard = get_shard(key, _map["sharding_bits"], in_dtype != 'h')
-            _path = _map["shards"][_shard]
-            assert _path, f"shard {_shard} not found at {_path}"
+            _shard = get_shard(key, _map.sharding_bits, in_dtype != 'h')
+            _woc_file = _map.shards[_shard]
+            assert _woc_file, f"shard {_shard} not found at {_woc_file}"
 
-            _tch = get_tch(_path)
+            _tch = get_tch(_woc_file.path)
             _bytes = _tch[key]
 
             if self._is_debug_enabled:
-                self._logger.debug(f"get from tch: shard={_shard} db={_path} "
+                self._logger.debug(f"get from tch: shard={_shard} db={_woc_file} "
                         f"in {(time.time_ns() - start_time) / 1e6:.2f}ms")
 
         return _bytes, out_dtype
@@ -816,28 +837,18 @@ class WocMapsLocal(WocMapsBase):
         """
         Count the number of keys in a map (# of larges + # of tch keys)
         """
-        # translate obj_name to map_name
-        if map_name == 'tree':
-            map_name = 'tree.tch'
-        elif map_name == 'commit':
-            map_name = 'commit.tch'
-        elif map_name == 'blob':
-            map_name = 'sha1.blob.tch'
-
         if self._is_debug_enabled:
             start_time = time.time_ns()
-
-        if map_name in self.maps:
-            _map = self.config["maps"][map_name][0]
-        elif map_name in self.objects:
-            _map = self.config["objects"][map_name]
-        else:
+        
+        try:
+            _map = self._lookup[map_name]
+        except KeyError:
             raise KeyError(f'Invalid map name: {map_name}, '
-                f'expect one of {", ".join(self.maps | self.objects)}')
+                f'expect one of {", ".join(self._lookup.keys())}')
 
         _count = len(_map["larges"]) if "larges" in _map else 0
         for _shard in _map["shards"]:
-            _tch = get_tch(_shard)
+            _tch = get_tch(_shard.path)
             _count += len(_tch)
 
         if self._is_debug_enabled:

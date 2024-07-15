@@ -1,5 +1,5 @@
 {
-    "wocSchemaVersion": 1,
+    "wocSchemaVersion": 2,
     "entities": {
         "a": "author",
         "A": "author_unalised",

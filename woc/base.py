@@ -1,16 +1,55 @@
-from typing import Iterable, List, Literal, Tuple, Union
+from dataclasses import dataclass
+from typing import Dict, List, Literal, Optional, Tuple, Union
 
 WocObjectsWithContent = Literal["tree", "blob", "commit", "tkns", "tag", "bdiff"]
 """WoC objects stored in stacked binary files."""
 
-WocSupportedProfileVersions = (1,)
+WocSupportedProfileVersions = (1, 2)
 """Profile versions supported by the current python-woc."""
 
 
+@dataclass
+class WocFile:
+    """Represents a file in the WoC database."""
+
+    path: str
+    """Path to the file in the local filesystem."""
+
+    size: Optional[int] = None
+    """Size of file in bytes."""
+
+    digest: Optional[str] = None
+    """16-char digest calculated by woc.utils.fast_digest."""
+
+
+@dataclass
+class WocObject:
+    name: str
+    """Name of the map, e.g. 'c2p', 'c2r', 'P2c'."""
+
+    sharding_bits: int
+    """Number of bits used for sharding."""
+
+    shards: List[WocFile]
+    """List of shard files."""
+
+
+@dataclass
+class WocMap(WocObject):
+    version: str
+    """version of the map, e.g. 'R', 'U'."""
+
+    larges: Dict[str, WocFile]
+    """Large files associated with the map."""
+
+    dtypes: Tuple[str, str]
+    """Data types of the map, e.g. ('h', 'cs'), ('h', 'hhwww')."""
+
+
 class WocMapsBase:
-    maps: Iterable[str]
+    maps: List[WocMap]
     """List of basemaps available in the WoC database."""
-    objects: Iterable[str]
+    objects: List[WocObject]
     """List of objects available in the WoC database."""
 
     def __init__(self, *args, **kwargs):

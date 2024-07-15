@@ -12,6 +12,8 @@ import re
 from functools import cmp_to_key
 from typing import Iterable, Optional, Tuple
 
+from .utils import sample_md5
+
 _default_profile = os.path.join(os.path.dirname(__file__), "wocprofile.default.json")
 _logger = logging.getLogger(__name__)
 _logger.setLevel(logging.INFO)
@@ -147,6 +149,7 @@ def detect_profile(
     version: Optional[str] = None,
     preset_path: Optional[str] = None,
     check_missing: bool = True,
+    with_digest: bool = False,
 ):
     _maps, _objs = {}, {}
 
@@ -285,6 +288,54 @@ def detect_profile(
     with open(preset_path, "r") as f:
         res = json.load(f)
 
+    for l_maps in _ls_maps.values():
+        for _map in l_maps:
+            # iterate over shards
+            _new_shards = []
+            for shard_path in _map["shards"]:
+                if shard_path is None:
+                    continue
+                _new_shards.append(
+                    {
+                        "path": shard_path,
+                        "size": os.path.getsize(shard_path),
+                        "digest": sample_md5(shard_path) if with_digest else None,
+                    }
+                )
+            _map["shards"] = _new_shards
+
+            # iterate over larges
+            _new_larges = {}
+            for hash, large_path in _map["larges"].items():
+                _new_larges[hash] = {
+                    "path": large_path,
+                    "size": os.path.getsize(large_path),
+                    "digest": sample_md5(large_path) if with_digest else None,
+                }
+            _map["larges"] = _new_larges
+
+    for obj_name, obj in _ls_objs.items():
+        _new_shards = []
+        for shard_path in obj["shards"]:
+            if shard_path is None:
+                continue
+            _new_shards.append(
+                {
+                    "path": shard_path,
+                    "size": os.path.getsize(shard_path),
+                    "digest": sample_md5(shard_path) if with_digest else None,
+                }
+            )
+        obj["shards"] = _new_shards
+
+        # aliases
+        if obj_name == "tree.tch":
+            obj["alias"] = "tree"
+        elif obj_name == "commit.tch":
+            obj["alias"] = "commit"
+        elif obj_name == "sha1.blob.tch":
+            obj["alias"] = "blob"
+
     res["maps"] = _ls_maps
     res["objects"] = _ls_objs
     return res
@@ -310,10 +361,19 @@ if __name__ == "__main__":
         action="store_false",
         help="do not check missing shards",
     )
+    parser.add_argument(
+        "--with-digest",
+        dest="with_digest",
+        action="store_true",
+        help="calculate digest for each file",
+        default=False,
+    )
 
     args = parser.parse_args()
 
-    res = detect_profile(args.paths, args.version, args.preset, args.check_missing)
+    res = detect_profile(
+        args.paths, args.version, args.preset, args.check_missing, args.with_digest
+    )
     if args.output:
         with open(args.output, "w") as f:
             json.dump(res, f, indent=2)
