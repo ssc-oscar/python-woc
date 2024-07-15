@@ -11,6 +11,7 @@ import os
 import re
 from functools import cmp_to_key
 from typing import Iterable, Optional, Tuple
+from tqdm import tqdm
 
 from .utils import sample_md5
 
@@ -209,9 +210,7 @@ def detect_profile(
                 or (not f.startswith("pack") and f.endswith(".idx"))
                 or f.endswith(".bin")
             ]
-            for idx, f in enumerate(files):
-                if idx % 1000 == 0:
-                    _logger.info(f"Processing {f} in {path}, {idx+1}/{len(files)}")
+            for idx, f in enumerate(tqdm(files, desc=root)):
 
                 _r = parse_map_fname(f)
                 if _r:

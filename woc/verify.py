@@ -1,5 +1,6 @@
 import logging
 import os
+from tqdm import tqdm
 
 from woc.base import WocFile
 from woc.local import WocMapsLocal
@@ -39,7 +40,7 @@ if __name__ == "__main__":
         files_to_check.extend(obj.shards)
     files_to_check = list(filter(lambda x: x, files_to_check))
 
-    for fobj in files_to_check:
+    for fobj in tqdm(files_to_check, desc="Checking files"):
         try:
             check_file(fobj)
         except AssertionError as e:
