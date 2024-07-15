@@ -846,8 +846,8 @@ class WocMapsLocal(WocMapsBase):
             raise KeyError(f'Invalid map name: {map_name}, '
                 f'expect one of {", ".join(self._lookup.keys())}')
 
-        _count = len(_map["larges"]) if "larges" in _map else 0
-        for _shard in _map["shards"]:
+        _count = len(_map.larges) if hasattr(_map, "larges") else 0
+        for _shard in _map.shards:
             _tch = get_tch(_shard.path)
             _count += len(_tch)
 
