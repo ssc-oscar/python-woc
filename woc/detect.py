@@ -11,6 +11,7 @@ import os
 import re
 from functools import cmp_to_key
 from typing import Iterable, Optional, Tuple
+
 from tqdm import tqdm
 
 from .utils import sample_md5
@@ -211,7 +212,6 @@ def detect_profile(
                 or f.endswith(".bin")
             ]
             for idx, f in enumerate(tqdm(files, desc=root)):
-
                 _r = parse_map_fname(f)
                 if _r:
                     src, dst, ver, idx = _r
@@ -283,10 +283,8 @@ def detect_profile(
             v["shards"] = _ls
             _ls_objs[k] = v
 
-    # load the preset profile
-    with open(preset_path, "r") as f:
-        res = json.load(f)
-
+    # transform to v2
+    _total_files = 0
     for l_maps in _ls_maps.values():
         for _map in l_maps:
             # iterate over shards
@@ -298,10 +296,11 @@ def detect_profile(
                     {
                         "path": shard_path,
                         "size": os.path.getsize(shard_path),
-                        "digest": sample_md5(shard_path) if with_digest else None,
+                        "digest": None,
                     }
                 )
             _map["shards"] = _new_shards
+            _total_files += len(_new_shards)
 
             # iterate over larges
             _new_larges = {}
@@ -309,9 +308,10 @@ def detect_profile(
                 _new_larges[hash] = {
                     "path": large_path,
                     "size": os.path.getsize(large_path),
-                    "digest": sample_md5(large_path) if with_digest else None,
+                    "digest": None,
                 }
             _map["larges"] = _new_larges
+            _total_files += len(_new_larges)
 
     for obj_name, obj in _ls_objs.items():
         _new_shards = []
@@ -322,10 +322,11 @@ def detect_profile(
                 {
                     "path": shard_path,
                     "size": os.path.getsize(shard_path),
-                    "digest": sample_md5(shard_path) if with_digest else None,
+                    "digest": None,
                 }
             )
         obj["shards"] = _new_shards
+        _total_files += len(_new_shards)
 
         # aliases
         if obj_name == "tree.tch":
@@ -334,6 +335,30 @@ def detect_profile(
             obj["alias"] = "commit"
         elif obj_name == "sha1.blob.tch":
             obj["alias"] = "blob"
+
+    if with_digest:
+        with tqdm(total=_total_files, desc="Calculating digests") as pbar:
+            for l_maps in _ls_maps.values():
+                for _map in l_maps:
+                    for shard in _map["shards"]:
+                        if shard is None:
+                            continue
+                        shard["digest"] = sample_md5(shard["path"])
+                        pbar.update(1)
+                    for large in _map["larges"].values():
+                        large["digest"] = sample_md5(large["path"])
+                        pbar.update(1)
+
+            for obj in _ls_objs.values():
+                for shard in obj["shards"]:
+                    if shard is None:
+                        continue
+                    shard["digest"] = sample_md5(shard["path"])
+                    pbar.update(1)
+
+    # load the preset profile
+    with open(preset_path, "r") as f:
+        res = json.load(f)
 
     res["maps"] = _ls_maps
     res["objects"] = _ls_objs
