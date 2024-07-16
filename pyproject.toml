@@ -21,7 +21,7 @@ generate-setup-file = false
 python = "^3.8"
 python-lzf = "^0.2.4"
 chardet = "^5.2.0"
-tqdm = "^4.66.4"
+tqdm = "^4.65.0"
 
 [tool.poetry.group.build.dependencies]
 cython = "^0.29.0"
