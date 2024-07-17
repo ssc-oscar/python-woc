@@ -283,6 +283,15 @@ def detect_profile(
             v["shards"] = _ls
             _ls_objs[k] = v
 
+    # quirk for da* servers
+    # follow symlinks to avoid the overhead of NFS
+    def _resolve_path(file_path: str) -> str:
+        _resolved = os.path.realpath(file_path)
+        if file_path != _resolved and re.match(r"^/da[0-9]+", _resolved):
+            _logger.warning(f"Resolve {file_path} to {_resolved}")
+            return _resolved
+        return file_path
+
     # transform to v2
     _total_files = 0
     for l_maps in _ls_maps.values():
@@ -294,7 +303,7 @@ def detect_profile(
                     continue
                 _new_shards.append(
                     {
-                        "path": shard_path,
+                        "path": _resolve_path(shard_path),
                         "size": os.path.getsize(shard_path),
                         "digest": None,
                     }
@@ -306,7 +315,7 @@ def detect_profile(
             _new_larges = {}
             for hash, large_path in _map["larges"].items():
                 _new_larges[hash] = {
-                    "path": large_path,
+                    "path": _resolve_path(large_path),
                     "size": os.path.getsize(large_path),
                     "digest": None,
                 }
@@ -320,7 +329,7 @@ def detect_profile(
                 continue
             _new_shards.append(
                 {
-                    "path": shard_path,
+                    "path": _resolve_path(shard_path),
                     "size": os.path.getsize(shard_path),
                     "digest": None,
                 }
