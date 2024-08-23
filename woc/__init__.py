@@ -19,3 +19,7 @@
 """  # noqa: D205
 
 __all__ = ["local", "tch", "detect", "objects"]
+
+import importlib.metadata
+
+__version__ = importlib.metadata.version("python-woc")
