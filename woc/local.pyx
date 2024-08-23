@@ -548,6 +548,7 @@ class WocMapsLocal(WocMapsBase):
             profile_path = (
                 "wocprofile.json",
                 "~/.wocprofile.json",
+                "/home/wocprofile.json",
                 "/etc/wocprofile.json",
             )
         if isinstance(profile_path, str):

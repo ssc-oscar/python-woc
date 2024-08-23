@@ -13,7 +13,7 @@ class WocMapsLocal(WocMapsBase):
         Initialize local WoC maps with a profile.
 
         :param profile_path: path to the woc profile.
-                             if not provided, use `./wocprofile.json`, `~/.wocprofile.json`, `/etc/wocprofile.json`.
+                             if not provided, use `./wocprofile.json`, `~/.wocprofile.json`, `/home/wocprofile.json`, `/etc/wocprofile.json`.
         :param version: version of the profile, default to the latest version.
                         can be a single version like 'R' or a list of versions like ['R', 'U'].
         :param exclude_larges: exclude large maps from the profile. This is useful when you don't care about files or commits appear everywhere.

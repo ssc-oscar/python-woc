@@ -65,7 +65,7 @@ Profiles are generated using the `woc.detect` script. The script takes a list of
 python3 woc.detect /path/to/woc/1 /path/to/woc/2 ... > wocprofile.json
 ```
 
-By default, python-woc looks for `wocprofile.json`, `~/.wocprofile.json`, and `/etc/wocprofile.json` for the profile. 
+By default, python-woc looks for `wocprofile.json`, `~/.wocprofile.json`, `/home/wocprofile.json` and `/etc/wocprofile.json` for the profile. 
 
 ## Use CLI
 
