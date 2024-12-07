@@ -815,7 +815,7 @@ class WocMapsLocal(WocMapsBase):
             _map_obj = self.config['objects']['blob.bin']
             shard = get_shard(key, _map_obj['sharding_bits'], use_fnv_keys=False)
 
-            with open(_map_obj['shards'][shard], "rb") as f:
+            with open(_map_obj['shards'][shard]['path'], "rb") as f:
                 f.seek(offset)
                 _out_bin = f.read(length)
             if self._is_debug_enabled:
