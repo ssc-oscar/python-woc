@@ -187,6 +187,11 @@ def detect_profile(
         _map["sharding_bits"] = max(_map["sharding_bits"], prefix_len)
 
     def _handle_obj(name, idx, ext):
+        # quirk for "All.sha1" folder
+        # we don't want sha1.blob_*.tch files
+        if root.endswith("All.sha1"):
+            return
+        
         _map_name = f"{name}.{ext}"
         prefix_len = int(idx).bit_length() if idx else 0
         _obj = _objs.setdefault(
