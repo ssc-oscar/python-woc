@@ -540,7 +540,7 @@ def _cached_open(path: str, is_gzip: bool = False, *args, **kwargs) -> FileIO:
         _file_lock.acquire()
         if path in _file_pool:
             return _file_pool[path]
-        if is_gzip:
+        if is_gzip is True:
             _file_pool[path] = RapidgzipFile(path, parallelization=WocNumProcesses, *args, **kwargs)
             # build gzip index cache if not exists
             _index_path = os.path.join(WocCachePath, hex(fnvhash(path.encode()))[2:] + '.gzidx')
@@ -571,35 +571,34 @@ def read_large_random_access(
     :return: a tuple of bytes and the next offset, -1 if EOF. Returned bytes must not begin or end with a separator.
     """
     if dtype == 'h':
-        with _cached_open(path, 'rb') as f:
-            if offset == 0:
-                offset = 20  
-            _new_len = (length // 20) * 20 # 160 bits of SHA1
-            f.seek(offset)
-            r = f.read(_new_len)
-            if len(r) < _new_len: # EOF
-                return r, -1
-            return r, offset + _new_len 
+        f = _cached_open(path, mode='rb')
+        if offset == 0:
+            offset = 20  
+        _new_len = (length // 20) * 20 # 160 bits of SHA1
+        f.seek(offset)
+        r = f.read(_new_len)
+        if len(r) < _new_len: # EOF
+            return r, -1
+        return r, offset + _new_len 
     else:
-        # use zlib to decompress
-        with _cached_open(path, 'rb') as f:
-            if offset == 0:
-                # find first 256 bytes for b'\n', don't scan the whole document
-                _idx = f.read(256).find(b'\n')
-                offset = _idx + 1 if _idx > 0 else 0
-            f.seek(offset)
-            _uncompressed = f.read(length)
-            if len(_uncompressed) < length: # EOF
-                return _uncompressed, -1
-            # the tail of the file: ;foo.sh;bar.sh%EOF
-            # should not hang here, b';' is always there
-            _last_sep_idx = _uncompressed.rfind(b';')
-            if _last_sep_idx == -1:  # no separator found
-                return _uncompressed, offset + length
-            if _uncompressed[0] == b';': # begins with separator
-                _uncompressed = _uncompressed[1:]
-                _last_sep_idx -= 1
-            return _uncompressed[:_last_sep_idx], offset + _last_sep_idx + 1
+        f = _cached_open(path, mode='rb', is_gzip=True)
+        if offset == 0:
+            # find first 256 bytes for b'\n', don't scan the whole document
+            _idx = f.read(256).find(b'\n')
+            offset = _idx + 1 if _idx > 0 else 0
+        f.seek(offset)
+        _uncompressed = f.read(length)
+        if len(_uncompressed) < length: # EOF
+            return _uncompressed, -1
+        # the tail of the file: ;foo.sh;bar.sh%EOF
+        # should not hang here, b';' is always there
+        _last_sep_idx = _uncompressed.rfind(b';')
+        if _last_sep_idx == -1:  # no separator found
+            return _uncompressed, offset + length
+        if _uncompressed[0] == b';': # begins with separator
+            _uncompressed = _uncompressed[1:]
+            _last_sep_idx -= 1
+        return _uncompressed[:_last_sep_idx], offset + _last_sep_idx + 1
 
 def read_large_iter(
     path: str,
