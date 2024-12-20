@@ -541,7 +541,7 @@ def _cached_open(path: str, is_gzip: bool = False, *args, **kwargs) -> FileIO:
         if path in _file_pool:
             return _file_pool[path]
         if is_gzip is True:
-            _file_pool[path] = RapidgzipFile(path, parallelization=WocNumProcesses, *args, **kwargs)
+            _file_pool[path] = RapidgzipFile(path, *args, parallelization=WocNumProcesses, **kwargs)
             # build gzip index cache if not exists
             _index_path = os.path.join(WocCachePath, hex(fnvhash(path.encode()))[2:] + '.gzidx')
             if os.path.exists(_index_path):
@@ -571,7 +571,7 @@ def read_large_random_access(
     :return: a tuple of bytes and the next offset, None if EOF. Returned bytes must not begin or end with a separator.
     """
     if dtype == 'h':
-        f = _cached_open(path, mode='rb')
+        f = _cached_open(path, 'rb')
         if offset == 0:
             offset = 20  
         _new_len = (length // 20) * 20 # 160 bits of SHA1
@@ -581,7 +581,7 @@ def read_large_random_access(
             return r, None
         return r, offset + _new_len 
     else:
-        f = _cached_open(path, mode='rb', is_gzip=True)
+        f = _cached_open(path, is_gzip=True)
         if offset == 0:
             # find first 256 bytes for b'\n', don't scan the whole document
             _idx = f.read(256).find(b'\n')
@@ -772,17 +772,16 @@ class WocMapsLocal(WocMapsBase):
         _bytes, decode_dtype, next_cursor = self._get_tch_bytes(map_name, key)
         _decoded = decode_value(_bytes, decode_dtype)
 
+        for v in _decoded:
+            yield v
+
         if next_cursor is None or self._on_large != 'all':
-            for v in _decoded:
-                yield v
-        
+            return 
+
         while next_cursor is not None:
-            _bytes, next_cursor = self._get_tch_bytes(map_name, key, cursor=next_cursor)
+            _bytes, _, next_cursor = self._get_tch_bytes(map_name, key, cursor=next_cursor)
             for v in decode_value(_bytes, decode_dtype):
                 yield v
-
-        return _decoded
-
 
     def get_values(
         self,
