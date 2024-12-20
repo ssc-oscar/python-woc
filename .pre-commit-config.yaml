@@ -7,7 +7,7 @@ default_language_version:
 repos:
   # ruff: linting + formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.4
+    rev: v0.8.4
     hooks:
       - id: ruff
         args: ["--fix"]
