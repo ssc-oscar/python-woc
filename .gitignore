@@ -6,6 +6,8 @@ csv/*
 settings.py
 data/*
 */migrations/*
+*.json
+!wocprofile.default.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

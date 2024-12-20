@@ -22,6 +22,7 @@ python = "^3.8"
 python-lzf = "^0.2.4"
 chardet = "^5.2.0"
 tqdm = "^4.65.0"
+rapidgzip = "^0.14.3"
 
 [tool.poetry.group.build.dependencies]
 cython = "^0.29.0"
@@ -40,6 +41,7 @@ ruff = "^0.4.4"  # <- ruff is powerful enough to be the only linter
 # sphinx-autodoc-typehints = "^1.25.3"
 pdoc = "^14.5.0" # <- drop sphinx, too many deps and rst is not fun
 pre-commit = "^3.5"
+mypy = "^1.5.0"
 
 [build-system]
 requires = ["poetry-core", "Cython>=0.29.0,<1.0.0", "setuptools>=42"]

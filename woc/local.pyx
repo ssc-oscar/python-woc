@@ -10,8 +10,9 @@ import time
 from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t
 from libc.string cimport memchr, strstr, strchr, strlen, strncmp
 from threading import Lock
-from typing import Tuple, Dict, Iterable, List, Union, Literal, Optional
-import gzip
+from typing import Tuple, Dict, Iterable, List, Union, Literal, Optional, Generator
+from io import FileIO
+from rapidgzip import RapidgzipFile
 
 try:
     import lzf
@@ -19,7 +20,7 @@ try:
 except ImportError or AssertionError:
     raise ImportError('python-lzf is required to decompress LZF-compressed data: `pip install python-lzf`')
 
-from .base import WocMapsBase,WocFile,WocMap, WocObject, WocSupportedProfileVersions
+from .base import WocMapsBase,WocFile,WocMap, WocObject, WocSupportedProfileVersions, WocCachePath, WocNumProcesses
 from .tch cimport TCHashDB
 
 cdef extern from 'Python.h':
@@ -515,22 +516,111 @@ def decode_commit(
 #         full_msg,
 #     )
 
-def read_large(path: str, dtype: str) -> bytes:
-    """Read a *.large.* and return its content"""
+# def read_large(path: str, dtype: str) -> bytes:
+#     """Read a *.large.* and return its content"""
+#     if dtype == 'h':
+#         with open(path, 'rb') as f:
+#             f.seek(20) # 160 bits of SHA1
+#             return f.read()
+#     else:
+#         # use zlib to decompress
+#         with gzip.open(path, 'rb') as f:
+#             _uncompressed = f.read()
+#             # find first 256 bytes for b'\n', don't scan the whole document
+#             _idx = _uncompressed[:256].find(b'\n')
+#             if _idx > 0:
+#                 return _uncompressed[_idx+1:]  # a2f
+#             return _uncompressed  # b2tac
+
+_file_pool: Dict[str, FileIO] = {}
+_file_lock = Lock()
+
+def _cached_open(path: str, is_gzip: bool = False, *args, **kwargs) -> FileIO:
+    try:
+        _file_lock.acquire()
+        if path in _file_pool:
+            return _file_pool[path]
+        if is_gzip:
+            _file_pool[path] = RapidgzipFile(path, parallelization=WocNumProcesses, *args, **kwargs)
+            # build gzip index cache if not exists
+            _index_path = os.path.join(WocCachePath, hex(fnvhash(path.encode()))[2:] + '.gzidx')
+            if os.path.exists(_index_path):
+                _file_pool[path].import_index(_index_path)
+            else:
+                _file_pool[path].export_index(_index_path)
+        else:
+            _file_pool[path] = open(path, *args, **kwargs)
+        return _file_pool[path]
+    finally:
+        _file_lock.release()
+
+def read_large_random_access(
+    path: str,
+    dtype: str,
+    offset: int = 0,
+    length: int = 8192
+) -> Tuple[bytes, int]:
+    """
+    Read a *.large.* and return its content.
+    
+    :param path: path to the file
+    :param dtype: data type
+    :param offset: offset to start reading. It is either 0 or after the last separator.
+    :param length: length to read. It should be longer than the longest record.
+
+    :return: a tuple of bytes and the next offset, -1 if EOF. Returned bytes must not begin or end with a separator.
+    """
     if dtype == 'h':
-        with open(path, 'rb') as f:
-            f.seek(20) # 160 bits of SHA1
-            return f.read()
+        with _cached_open(path, 'rb') as f:
+            if offset == 0:
+                offset = 20  
+            _new_len = (length // 20) * 20 # 160 bits of SHA1
+            f.seek(offset)
+            r = f.read(_new_len)
+            if len(r) < _new_len: # EOF
+                return r, -1
+            return r, offset + _new_len 
     else:
         # use zlib to decompress
-        with gzip.open(path, 'rb') as f:
-            _uncompressed = f.read()
-            # find first 256 bytes for b'\n', don't scan the whole document
-            _idx = _uncompressed[:256].find(b'\n')
-            if _idx > 0:
-                return _uncompressed[_idx+1:]  # a2f
-            return _uncompressed  # b2tac
+        with _cached_open(path, 'rb') as f:
+            if offset == 0:
+                # find first 256 bytes for b'\n', don't scan the whole document
+                _idx = f.read(256).find(b'\n')
+                offset = _idx + 1 if _idx > 0 else 0
+            f.seek(offset)
+            _uncompressed = f.read(length)
+            if len(_uncompressed) < length: # EOF
+                return _uncompressed, -1
+            # the tail of the file: ;foo.sh;bar.sh%EOF
+            # should not hang here, b';' is always there
+            _last_sep_idx = _uncompressed.rfind(b';')
+            if _last_sep_idx == -1:  # no separator found
+                return _uncompressed, offset + length
+            if _uncompressed[0] == b';': # begins with separator
+                _uncompressed = _uncompressed[1:]
+                _last_sep_idx -= 1
+            return _uncompressed[:_last_sep_idx], offset + _last_sep_idx + 1
 
+def read_large_iter(
+    path: str,
+    dtype: str,
+    chunk_size: int = 8192
+) -> Generator[bytes, None, None]:
+    """Read a *.large.* and return its content.
+    
+    :param path: path to the file
+    :param dtype: data type
+    :param length: length to read. It should be longer than the longest record.
+
+    :return: a generator of bytes. Returned bytes must not begin or end with a separator.
+    """
+    _cursor = 0
+    while True:
+        _uncompressed, _cursor = read_large_random_access(path, offset=_cursor, length=chunk_size, dtype=dtype)
+        if _uncompressed:
+            yield _uncompressed
+        if not _uncompressed or _cursor == -1:
+            break
 
 class WocMapsLocal(WocMapsBase):
     def __init__(self,
@@ -664,8 +754,7 @@ class WocMapsLocal(WocMapsBase):
             start_time = time.time_ns()
 
         if hasattr(_map, "larges") and hex_str in _map.larges:
-            _bytes = read_large(_map.larges[hex_str].path, out_dtype)
-
+            _bytes = b';'.join(read_large_iter(_map.larges[hex_str].path, out_dtype))
             if self._is_debug_enabled:
                 self._logger.debug(f"read large: file={_map['larges'][hex_str]} "
                                    f"in {(time.time_ns() - start_time) / 1e6:.2f}ms")
