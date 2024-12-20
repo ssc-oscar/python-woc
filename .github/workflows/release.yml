@@ -54,6 +54,10 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Install bz2
+        run: |
+          sudo apt-get update && sudo apt-get install libbz2-dev -y
+
       - name: Build source distribution
         run: pipx run build --sdist
 

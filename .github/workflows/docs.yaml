@@ -29,6 +29,10 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Install bz2
+        run: |
+          sudo apt-get update && sudo apt-get install libbz2-dev -y
+
       - name: Install Poetry
         run: |
           PIPX_BIN_DIR=/usr/local/bin pipx install poetry

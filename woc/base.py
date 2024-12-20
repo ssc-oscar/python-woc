@@ -1,6 +1,6 @@
+import os
 from dataclasses import dataclass
 from typing import Dict, List, Literal, Optional, Tuple, Union
-import os
 
 WocObjectsWithContent = Literal["tree", "blob", "commit", "tkns", "tag", "bdiff"]
 """WoC objects stored in stacked binary files."""
@@ -8,12 +8,14 @@ WocObjectsWithContent = Literal["tree", "blob", "commit", "tkns", "tag", "bdiff"
 WocSupportedProfileVersions = (1, 2)
 """Profile versions supported by the current python-woc."""
 
-WocCachePath = os.path.join(os.path.expanduser(os.environ.get("XDG_CACHE_HOME", "~/.cache"), "woc"))
+WocCachePath = os.path.join(os.path.expanduser(os.environ.get("XDG_CACHE_HOME", "~/.cache")), "woc")
+
 """Path to the cache directory for woc."""
 os.makedirs(WocCachePath, exist_ok=True)
 
 WocNumProcesses = max(1, min(os.cpu_count() // 2, 16))
 """Number of processes to use for parallel processing."""
+
 
 @dataclass
 class WocFile:
