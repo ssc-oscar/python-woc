@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Literal, Optional, Tuple, Union
+from typing import Dict, Generator, List, Literal, Optional, Tuple, Union
 
 WocObjectsWithContent = Literal["tree", "blob", "commit", "tkns", "tag", "bdiff"]
 """WoC objects stored in stacked binary files."""
@@ -8,7 +8,9 @@ WocObjectsWithContent = Literal["tree", "blob", "commit", "tkns", "tag", "bdiff"
 WocSupportedProfileVersions = (1, 2)
 """Profile versions supported by the current python-woc."""
 
-WocCachePath = os.path.join(os.path.expanduser(os.environ.get("XDG_CACHE_HOME", "~/.cache")), "woc")
+WocCachePath = os.path.join(
+    os.path.expanduser(os.environ.get("XDG_CACHE_HOME", "~/.cache")), "woc"
+)
 
 """Path to the cache directory for woc."""
 os.makedirs(WocCachePath, exist_ok=True)
@@ -90,6 +92,24 @@ class WocMapsBase:
         """
         raise NotImplementedError("WocMapsBase is an abstract class")
 
+    def iter_values(
+        self,
+        map_name: str,
+        key: Union[bytes, str],
+    ) -> Generator[Union[List[str], Tuple[str, str, str], List[Tuple[str, str, str]]], None, None]:
+        """
+        Similar to get_values, but returns a generator instead of a list. This is useful when querying large maps (on_large='all').
+
+        :param map_name: The name of the map, e.g. 'c2p', 'c2r', 'P2c'
+        :param key: The key of the object. For git objects, it is the SHA-1 hash of the object
+                    (in bytes or hex string). For other objects like Author, it is the name of the object.
+        :return: The value of the object. Can be a list of strings, a tuple of strings, or a list of tuples of strings. Please refer to the documentation for details.
+
+        >>> list(self.iter_values('P2c', 'user2589_minicms'))
+        ['05cf84081b63cda822ee407e688269b494a642de', ...]
+        """
+        raise NotImplementedError("WocMapsBase is an abstract class")
+
     def show_content(
         self,
         obj_name: WocObjectsWithContent,
@@ -129,5 +149,20 @@ class WocMapsBase:
 
         >>> self.count('c2r')
         12345
+        """
+        raise NotImplementedError("WocMapsBase is an abstract class")
+
+    def all_keys(
+        self,
+        map_name: str,
+    ) -> Generator[bytes, None, None]:
+        """
+        Iterate over all keys in a map.
+
+        :param map_name: The name of the mapping / object, e.g. 'c2p', 'c2r', 'commit'. When on_large is 'ignore', keys in large maps are excluded.
+        :return: A generator of keys in the map.
+
+        >>> for key in self.iter_map('P2c'):
+        ...     print(key)  # hash or encoded string
         """
         raise NotImplementedError("WocMapsBase is an abstract class")

@@ -1,4 +1,4 @@
-from typing import Iterable, List, Tuple, Union
+from typing import Iterable, List, Literal, Optional, Tuple, Union
 
 from .base import WocMapsBase
 
@@ -7,7 +7,7 @@ class WocMapsLocal(WocMapsBase):
         self,
         profile_path: Union[str, Iterable[str], None] = None,
         version: Union[str, Iterable[str], None] = None,
-        exclude_larges: bool = False,
+        on_large: Literal["ignore", "head", "all"] = "all",
     ) -> None:
         """
         Initialize local WoC maps with a profile.
@@ -16,13 +16,13 @@ class WocMapsLocal(WocMapsBase):
                              if not provided, use `./wocprofile.json`, `~/.wocprofile.json`, `/home/wocprofile.json`, `/etc/wocprofile.json`.
         :param version: version of the profile, default to the latest version.
                         can be a single version like 'R' or a list of versions like ['R', 'U'].
-        :param exclude_larges: exclude large maps from the profile. This is useful when you don't care about files or commits appear everywhere.
+        :param on_large: how to handle large files, default to 'all' (read all content). 'ignore' to ignore large files, 'head' to read only the first chunk.
         """
         ...
 
     def _get_tch_bytes(
         self, map_name: str, key: Union[bytes, str]
-    ) -> Tuple[bytes, str]: ...
+    ) -> Tuple[bytes, str, Optional[int]]: ...
     def _get_pos(
         self,
         obj_name: str,

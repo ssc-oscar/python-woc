@@ -1,4 +1,3 @@
-import json
 import os
 
 import pytest
@@ -134,6 +133,18 @@ def test_count(woc):
     assert res == 7
 
 
+def test_all_keys(woc):
+    res = list(woc.all_keys("blob"))
+    assert len(res) == 2
+    assert all(isinstance(r, bytes) for r in res)
+    res = list(woc.all_keys("tree"))
+    assert len(res) == 12
+    assert all(isinstance(r, bytes) for r in res)
+    res = list(woc.all_keys("commit"))
+    assert len(res) == 7
+    assert all(isinstance(r, bytes) for r in res)
+
+
 def test_version(woc):
     _test_pr = os.path.join(os.path.dirname(__file__), "test_profile.json")
     woc_u = WocMapsLocal(_test_pr, version="U")
@@ -144,5 +155,6 @@ def test_version(woc):
 
 def test_exclude_larges(woc):
     _test_pr = os.path.join(os.path.dirname(__file__), "test_profile.json")
-    woc_nolarge = WocMapsLocal(_test_pr, exclude_larges=True)
-    assert ".large." not in str(woc_nolarge.maps), json.dumps(woc_nolarge.config["maps"])
+    woc_nolarge = WocMapsLocal(_test_pr, on_large="ignore")
+    with pytest.raises(KeyError):
+        woc_nolarge.get_values("b2c", "3f2eca18f1bc0f3117748e2cea9251e5182db2f7")

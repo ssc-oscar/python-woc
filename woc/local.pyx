@@ -559,7 +559,7 @@ def read_large_random_access(
     dtype: str,
     offset: int = 0,
     length: int = 8192
-) -> Tuple[bytes, int]:
+) -> Tuple[bytes, Optional[int]]:
     """
     Read a *.large.* and return its content.
     
@@ -568,7 +568,7 @@ def read_large_random_access(
     :param offset: offset to start reading. It is either 0 or after the last separator.
     :param length: length to read. It should be longer than the longest record.
 
-    :return: a tuple of bytes and the next offset, -1 if EOF. Returned bytes must not begin or end with a separator.
+    :return: a tuple of bytes and the next offset, None if EOF. Returned bytes must not begin or end with a separator.
     """
     if dtype == 'h':
         f = _cached_open(path, mode='rb')
@@ -578,7 +578,7 @@ def read_large_random_access(
         f.seek(offset)
         r = f.read(_new_len)
         if len(r) < _new_len: # EOF
-            return r, -1
+            return r, None
         return r, offset + _new_len 
     else:
         f = _cached_open(path, mode='rb', is_gzip=True)
@@ -589,7 +589,7 @@ def read_large_random_access(
         f.seek(offset)
         _uncompressed = f.read(length)
         if len(_uncompressed) < length: # EOF
-            return _uncompressed, -1
+            return _uncompressed, None
         # the tail of the file: ;foo.sh;bar.sh%EOF
         # should not hang here, b';' is always there
         _last_sep_idx = _uncompressed.rfind(b';')
@@ -600,32 +600,11 @@ def read_large_random_access(
             _last_sep_idx -= 1
         return _uncompressed[:_last_sep_idx], offset + _last_sep_idx + 1
 
-def read_large_iter(
-    path: str,
-    dtype: str,
-    chunk_size: int = 8192
-) -> Generator[bytes, None, None]:
-    """Read a *.large.* and return its content.
-    
-    :param path: path to the file
-    :param dtype: data type
-    :param length: length to read. It should be longer than the longest record.
-
-    :return: a generator of bytes. Returned bytes must not begin or end with a separator.
-    """
-    _cursor = 0
-    while True:
-        _uncompressed, _cursor = read_large_random_access(path, offset=_cursor, length=chunk_size, dtype=dtype)
-        if _uncompressed:
-            yield _uncompressed
-        if not _uncompressed or _cursor == -1:
-            break
-
 class WocMapsLocal(WocMapsBase):
     def __init__(self,
             profile_path: Union[str, Iterable[str], None] = None,
             version: Union[str, Iterable[str], None] = None,
-            exclude_larges: bool = False
+            on_large: Literal['ignore', 'head', 'all'] = 'all',
         ) -> None:
         # init logger
         self._logger = logging.getLogger(__name__)
@@ -693,10 +672,8 @@ class WocMapsLocal(WocMapsBase):
                 version = (version, )
             self.maps = list(filter(lambda x: x.version in version, self.maps))
 
-        # exclude larges
-        if exclude_larges:
-            for _m in self.maps:
-                _m.larges = {}
+        # on_large
+        self._on_large = on_large
 
         # build lookup map
         self._lookup: Dict[str, Union[WocObject, WocMap]] = {}
@@ -717,8 +694,8 @@ class WocMapsLocal(WocMapsBase):
                 self._lookup['blob'] = _o
 
     def _get_tch_bytes(
-        self, map_name, key
-    ) -> Tuple[bytes, str]:
+        self, map_name, key, cursor=0
+    ) -> Tuple[bytes, str, Optional[int]]:
         """
         Get value (in bytes) from tch maps, return bytes and dtype
         """
@@ -727,6 +704,8 @@ class WocMapsLocal(WocMapsBase):
         except KeyError:
             raise KeyError(f'Invalid map name: {map_name}, '
                 f'expected one of {", ".join(self._lookup.keys())}')
+
+        next_cursor = None
 
         if hasattr(_map, "dtypes"):
             in_dtype, out_dtype = _map.dtypes
@@ -744,16 +723,20 @@ class WocMapsLocal(WocMapsBase):
             else:
                 hex_str = bytes(key).hex()
         else:
-            assert isinstance(key, str), "key must be a string for non-hash keys"
-            hex_str = hex(fnvhash(key.encode('utf-8')))[2:]
-            key = key.encode('utf-8')
+            if isinstance(key, str): # key is string
+                key = key.encode('utf-8')
+            hex_str = hex(fnvhash(key))[2:]
 
         if self._is_debug_enabled:
             self._logger.debug(f"hash: hex={hex_str} in {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
 
         if hasattr(_map, "larges") and hex_str in _map.larges:
-            _bytes = b';'.join(read_large_iter(_map.larges[hex_str].path, out_dtype))
+            if self._on_large == 'ignore':
+                raise KeyError(f"Large object {_map.larges[hex_str].path} is ignored")
+
+            _bytes, next_cursor = read_large_random_access(_map.larges[hex_str].path, out_dtype, cursor)
+
             if self._is_debug_enabled:
                 self._logger.debug(f"read large: file={_map['larges'][hex_str]} "
                                    f"in {(time.time_ns() - start_time) / 1e6:.2f}ms")
@@ -775,7 +758,31 @@ class WocMapsLocal(WocMapsBase):
                 self._logger.debug(f"get from tch: shard={_shard} db={_woc_file} "
                         f"in {(time.time_ns() - start_time) / 1e6:.2f}ms")
 
-        return _bytes, out_dtype
+        return _bytes, out_dtype, next_cursor
+
+    def iter_values(
+        self,
+        map_name: str,
+        key: Union[bytes, str],
+    ):
+        """Eqivalent to getValues in WoC Perl API.
+        >>> self.get_values('P2c', 'user2589_minicms')
+        ['05cf84081b63cda822ee407e688269b494a642de', ...]
+        """
+        _bytes, decode_dtype, next_cursor = self._get_tch_bytes(map_name, key)
+        _decoded = decode_value(_bytes, decode_dtype)
+
+        if next_cursor is None or self._on_large != 'all':
+            for v in _decoded:
+                yield v
+        
+        while next_cursor is not None:
+            _bytes, next_cursor = self._get_tch_bytes(map_name, key, cursor=next_cursor)
+            for v in decode_value(_bytes, decode_dtype):
+                yield v
+
+        return _decoded
+
 
     def get_values(
         self,
@@ -786,16 +793,7 @@ class WocMapsLocal(WocMapsBase):
         >>> self.get_values('P2c', 'user2589_minicms')
         ['05cf84081b63cda822ee407e688269b494a642de', ...]
         """
-        _bytes, decode_dtype = self._get_tch_bytes(map_name, key)
-
-        if self._is_debug_enabled:
-            start_time = time.time_ns()
-
-        _decoded = decode_value(_bytes, decode_dtype)
-
-        if self._is_debug_enabled:
-            self._logger.debug(f"decode: in {(time.time_ns() - start_time) / 1e6:.2f}ms")
-        return _decoded
+        return list(self.iter_values(map_name, key))
 
     def _get_pos(
         self,
@@ -945,3 +943,27 @@ class WocMapsLocal(WocMapsBase):
             self._logger.debug(f'count: len={_count} shards={len(_map["shards"])} '
                          f'larges={len(_map["larges"])} in {(time.time_ns() - start_time) / 1e6:.2f}ms')
         return _count
+
+    def all_keys(
+        self,
+        map_name: str,
+    ) -> Generator[bytes, None, None]:
+        """
+        Iterate over all keys in a map.
+
+        >>> for key in self.iter_map('P2c'):
+        ...     print(key)  # hash or encoded string
+        """
+        try:
+            _map: WocMap | WocObject  = self._lookup[map_name]
+        except KeyError:
+            raise KeyError(f'Invalid map name: {map_name}, '
+                f'expected one of {", ".join(self._lookup.keys())}')
+
+        for _tch in _map.shards:
+            _tch = get_tch(_tch.path)
+            for key in _tch:
+                yield key
+        if self._on_large != 'ignore' and hasattr(_map, "larges"):
+            for key in _map.larges: # convert to bytes
+                yield bytes.fromhex(key)

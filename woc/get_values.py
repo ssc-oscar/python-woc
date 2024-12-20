@@ -4,17 +4,17 @@
 # @authors: Runzhi He <rzhe@pku.edu.cn>
 # @date: 2024-05-27
 
-from typing import Iterable
+from typing import Generator, Iterable
 
 from .local import WocMapsLocal
 
 
-def format_map(key: str, map_objs: Iterable, level=1) -> str:
-    # flatten the nested list
-    while level > 1:
-        map_objs = [item for sublist in map_objs for item in sublist]
-        level -= 1
-    return key + ";" + ";".join(map(str, map_objs))
+def _flatten_list(s: Generator[Iterable, None, None]):
+    for item in s:
+        if isinstance(item, Iterable):
+            yield from item
+        else:
+            yield item
 
 
 if __name__ == "__main__":
@@ -34,14 +34,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     woc = WocMapsLocal(args.profile, args.version)
-    _level = 1
-    if args.type == "b2tac":
-        _level = 2
+
     for line in sys.stdin:
         try:
             key = line.strip()
-            obj = woc.get_values(args.type, key)
-            print(format_map(key, obj, _level))
+            _gen = woc.iter_values(args.type, key)
+            if args.type == "b2tac":
+                _gen = _flatten_list(_gen)
+            print(key, end="")
+            for _obj in _gen:
+                print(";", _obj, sep="", end="")
+            print()
         except BrokenPipeError:
             # ref: https://docs.python.org/3/library/signal.html#note-on-sigpipe
             devnull = os.open(os.devnull, os.O_WRONLY)
