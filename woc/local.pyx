@@ -168,6 +168,8 @@ def decode_str(bytes raw_data, str encoding='utf-8'):
     except UnicodeDecodeError:
         import chardet  # should be rarely used
         _encoding = chardet.detect(raw_data)['encoding']
+        if not _encoding:
+            _encoding = 'latin1'
         _ret = raw_data.decode(_encoding, errors='replace')
         if len(_ret) == 0:
             logging.error(f"Failed to decode: {raw_data[:20]}... with encoding {_encoding}")
