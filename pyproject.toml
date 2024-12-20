@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "python-woc"
-version = "0.2.3"
+version = "0.2.4"
 description = "Python interface for World of Code"
 authors = ["Runzhi He <rzhe@pku.edu.cn>", "Marat <marat@cmu.edu>"]
 license = "GPL-3.0"
