@@ -234,14 +234,14 @@ def decode_value(
         (Time, Author) = decode_str(buf0).split(";")
         return (Time, Author, cmt_sha.hex())
     elif out_dtype == 'cs3':  # type: list[tuple[str, str, str]]
-        data = decomp(value)
+        data = decomp_or_raw(value)
         _splited = decode_str(data).split(";")
         return [
             (_splited[i],_splited[i+1],_splited[i+2])
             for i in range(0, len(_splited), 3)
         ]
     elif out_dtype == 'cs':   # type: list[str]
-        data = decomp(value)
+        data = decomp_or_raw(value)
         return [decode_str(v)
             for v in data.split(b';')
             if v and v != b'EMPTY']
