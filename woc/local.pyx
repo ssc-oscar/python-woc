@@ -238,7 +238,7 @@ def decode_value(
         _splited = decode_str(data).split(";")
         return [
             (_splited[i],_splited[i+1],_splited[i+2])
-            for i in range(0, len(_splited), 3)
+            for i in range(0, len(_splited) - 2, 3)  # may not alway aligned reading large objects
         ]
     elif out_dtype == 'cs':   # type: list[str]
         data = decomp_or_raw(value)
@@ -595,6 +595,15 @@ def read_large_random_access(
         # the tail of the file: ;foo.sh;bar.sh%EOF
         # should not hang here, b';' is always there
         _last_sep_idx = _uncompressed.rfind(b';')
+        if dtype == 'cs3':  
+            # # of items must be multiple of 3
+            # | v1 ; v2 ; v3 ; v4 ; v5 | -> | v1 ; v2 ; v3 |
+            # | v1 ; v2 ; v3 | -> | v1 ; v2 ; v3 | (count=2)
+            _count_sep = _uncompressed.count(b';')
+            while _last_sep_idx != -1 and _count_sep % 3 != 0:
+                _count_sep -= 1
+                _last_sep_idx = _uncompressed.rfind(b';', 0, _last_sep_idx)
+            
         if _last_sep_idx == -1:  # no separator found
             return _uncompressed, offset + length
         if _uncompressed[0] == b';': # begins with separator
