@@ -20,7 +20,7 @@ try:
 except ImportError or AssertionError:
     raise ImportError('python-lzf is required to decompress LZF-compressed data: `pip install python-lzf`')
 
-from .base import WocMapsBase,WocFile,WocMap, WocObject, WocSupportedProfileVersions, WocCachePath, WocNumProcesses
+from .base import WocMapsBase,WocFile,WocMap, WocObject, WocSupportedProfileVersions, WocCachePath
 from .tch cimport TCHashDB
 
 cdef extern from 'Python.h':
@@ -543,7 +543,7 @@ def _cached_open(path: str, is_gzip: bool = False, *args, **kwargs) -> FileIO:
         if path in _file_pool:
             return _file_pool[path]
         if is_gzip is True:
-            _file_pool[path] = RapidgzipFile(path, *args, parallelization=WocNumProcesses, **kwargs)
+            _file_pool[path] = RapidgzipFile(path, *args, **kwargs)
             # build gzip index cache if not exists
             _index_path = os.path.join(WocCachePath, hex(fnvhash(path.encode()))[2:] + '.gzidx')
             if os.path.exists(_index_path):
@@ -560,7 +560,7 @@ def read_large_random_access(
     path: str,
     dtype: str,
     offset: int = 0,
-    length: int = 8192
+    length: int = 131072
 ) -> Tuple[bytes, Optional[int]]:
     """
     Read a *.large.* and return its content.
@@ -573,7 +573,7 @@ def read_large_random_access(
     :return: a tuple of bytes and the next offset, None if EOF. Returned bytes must not begin or end with a separator.
     """
     if dtype == 'h':
-        f = _cached_open(path, 'rb')
+        f = _cached_open(path, mode='rb')
         if offset == 0:
             offset = 20  
         _new_len = (length // 20) * 20 # 160 bits of SHA1

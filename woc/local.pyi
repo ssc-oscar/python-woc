@@ -21,7 +21,7 @@ class WocMapsLocal(WocMapsBase):
         ...
 
     def _get_tch_bytes(
-        self, map_name: str, key: Union[bytes, str]
+        self, map_name: str, key: Union[bytes, str], cursor=0
     ) -> Tuple[bytes, str, Optional[int]]: ...
     def _get_pos(
         self,

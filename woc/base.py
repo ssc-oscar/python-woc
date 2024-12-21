@@ -15,8 +15,8 @@ WocCachePath = os.path.join(
 """Path to the cache directory for woc."""
 os.makedirs(WocCachePath, exist_ok=True)
 
-WocNumProcesses = max(1, min(os.cpu_count() // 2, 16))
-"""Number of processes to use for parallel processing."""
+# WocNumProcesses = max(1, min(os.cpu_count() // 2, 16))
+# """Number of processes to use for parallel processing."""
 
 
 @dataclass
@@ -96,7 +96,9 @@ class WocMapsBase:
         self,
         map_name: str,
         key: Union[bytes, str],
-    ) -> Generator[Union[List[str], Tuple[str, str, str], List[Tuple[str, str, str]]], None, None]:
+    ) -> Generator[
+        Union[List[str], Tuple[str, str, str], List[Tuple[str, str, str]]], None, None
+    ]:
         """
         Similar to get_values, but returns a generator instead of a list. This is useful when querying large maps (on_large='all').
 
