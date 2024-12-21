@@ -20,7 +20,7 @@ try:
 except ImportError or AssertionError:
     raise ImportError('python-lzf is required to decompress LZF-compressed data: `pip install python-lzf`')
 
-from .base import WocMapsBase,WocFile,WocMap, WocObject, WocSupportedProfileVersions, WocCachePath
+from .base import WocMapsBase,WocFile,WocMap, WocObject, WocSupportedProfileVersions, WocCachePath, WocGzipChunkSize
 from .tch cimport TCHashDB
 
 cdef extern from 'Python.h':
@@ -746,7 +746,7 @@ class WocMapsLocal(WocMapsBase):
             if self._on_large == 'ignore':
                 raise KeyError(f"Large object {_map.larges[hex_str].path} is ignored")
 
-            _bytes, next_cursor = read_large_random_access(_map.larges[hex_str].path, out_dtype, cursor)
+            _bytes, next_cursor = read_large_random_access(_map.larges[hex_str].path, out_dtype, cursor, WocGzipChunkSize)
 
             if self._is_debug_enabled:
                 self._logger.debug(f"read large: file={_map['larges'][hex_str]} "

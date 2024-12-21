@@ -18,6 +18,9 @@ os.makedirs(WocCachePath, exist_ok=True)
 # WocNumProcesses = max(1, min(os.cpu_count() // 2, 16))
 # """Number of processes to use for parallel processing."""
 
+WocGzipChunkSize = 8 * 1024
+"""Chunk size for decoding large maps."""
+
 
 @dataclass
 class WocFile:
