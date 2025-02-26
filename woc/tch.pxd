@@ -14,3 +14,4 @@ cdef class TCHashDB:
     cpdef void delete(self, bytes key) except *
     cpdef void drop(self) except *
     cpdef void close(self) except *
+    cpdef void optimize(self) except *

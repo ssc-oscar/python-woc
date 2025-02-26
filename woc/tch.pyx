@@ -4,7 +4,7 @@
 # @authors: Runzhi He <rzhe@pku.edu.cn>
 # @date: 2024-01-17
 
-from libc.stdint cimport uint8_t, uint32_t, uint64_t
+from libc.stdint cimport uint8_t, uint32_t, uint64_t, int8_t, int64_t
 from libc.stdlib cimport free
 
 cdef extern from 'Python.h':
@@ -34,6 +34,7 @@ cdef extern from 'tchdb.h':
     bint tchdbout(TCHDB *hdb, const void *kbuf, int ksiz)  # Remove a record of a hash database object
     uint64_t tchdbrnum(TCHDB *hdb)  # Get the number of records of a hash database object
     bint tchdbvanish(TCHDB *hdb)  # Remove all records of a hash database object
+    bint tchdboptimize(TCHDB *hdb, int64_t bnum, int8_t apow, int8_t fpow, uint8_t opts); # Optimize the database to reduce space
 
 cdef class TCHashDB:
     """Object representing a Tokyocabinet Hash table"""
@@ -123,6 +124,11 @@ cdef class TCHashDB:
         cdef bint result = tchdbclose(self._db)
         if not result:
             raise IOError(f'Failed to close {self.filename}: ' + self._error())
+
+    cpdef void optimize(self) except *:
+        cdef bint result = tchdboptimize(self._db, -1, -1, -1, -1)
+        if not result:
+            raise IOError(f'Failed to optimize {self.filename}: ' + self._error())
 
     def __getitem__(self, bytes key):
         return self.get(key)

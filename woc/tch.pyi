@@ -54,6 +54,14 @@ class TCHashDB:
         :raises OSError: if the operation fails
         """
         ...
+        
+    def optimize(self) -> None:
+        """
+        Optimize the database.
+
+        :raises OSError: if the operation fails
+        """
+        ...
 
     def __getitem__(self, key: bytes) -> bytes: ...
     def __setitem__(self, key: bytes, value: bytes) -> None: ...
