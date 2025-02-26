@@ -1,4 +1,4 @@
-# cython: language_level=3str, wraparound=False, boundscheck=False, nonecheck=False, profile=True, linetrace=True
+# cython: language_level=3str, wraparound=False, boundscheck=True, nonecheck=False, profile=True, linetrace=True
 # SPDX-License-Identifier: GPL-3.0-or-later
 # @authors: Runzhi He <rzhe@pku.edu.cn>
 # @date: 2024-01-17
@@ -226,35 +226,39 @@ def decode_value(
     """
     Decode values from tch maps.
     """
-    if out_dtype == 'h':  # type: list[str]
-        return [value[i:i + 20].hex() for i in range(0, len(value), 20)]
-    elif out_dtype == 'sh':  # type: tuple[str, str, str]
-        buf0 = value[0:len(value)-21]
-        cmt_sha = value[(len(value)-20):len(value)]
-        (Time, Author) = decode_str(buf0).split(";")
-        return (Time, Author, cmt_sha.hex())
-    elif out_dtype == 'cs3':  # type: list[tuple[str, str, str]]
-        data = decomp_or_raw(value)
-        _splited = decode_str(data).split(";")
-        return [
-            (_splited[i],_splited[i+1],_splited[i+2])
-            for i in range(0, len(_splited) - 2, 3)  # may not alway aligned reading large objects
-        ]
-    elif out_dtype == 'cs':   # type: list[str]
-        data = decomp_or_raw(value)
-        return [decode_str(v)
-            for v in data.split(b';')
-            if v and v != b'EMPTY']
-    elif out_dtype == 's':  # type: list[str]
-        return [decode_str(v)
-            for v in value.split(b';')]
-    elif out_dtype == 'r':  # type: list[str, int]
-        _hex = value[:20].hex()
-        _len = unber(value[20:])[0]
-        return (_hex, _len)
-    elif out_dtype == 'hhwww':
-        raise NotImplemented
-    raise ValueError(f'Unsupported dtype: {out_dtype}')
+    try:
+        if out_dtype == 'h':  # type: list[str]
+            return [value[i:i + 20].hex() for i in range(0, len(value), 20)]
+        elif out_dtype == 'sh':  # type: tuple[str, str, str]
+            buf0 = value[0:len(value)-21]
+            cmt_sha = value[(len(value)-20):len(value)]
+            (Time, Author) = decode_str(buf0).split(";")
+            return (Time, Author, cmt_sha.hex())
+        elif out_dtype == 'cs3':  # type: list[tuple[str, str, str]]
+            data = decomp_or_raw(value)
+            _splited = decode_str(data).split(";")
+            return [
+                (_splited[i],_splited[i+1],_splited[i+2])
+                for i in range(0, len(_splited) - 2, 3)  # may not alway aligned reading large objects
+            ]
+        elif out_dtype == 'cs':   # type: list[str]
+            data = decomp_or_raw(value)
+            return [decode_str(v)
+                for v in data.split(b';')
+                if v and v != b'EMPTY']
+        elif out_dtype == 's':  # type: list[str]
+            return [decode_str(v)
+                for v in value.split(b';')]
+        elif out_dtype == 'r':  # type: list[str, int]
+            _hex = value[:20].hex()
+            _len = unber(value[20:])[0]
+            return (_hex, _len)
+        elif out_dtype == 'hhwww':
+            raise NotImplemented
+        raise ValueError(f'Unsupported dtype: {out_dtype}')
+    except Exception as e:
+        logging.error(f"Failed to decode value: {value[:40]}... with dtype {out_dtype}")
+        raise e
 
 def decode_tree(
     value: bytes
@@ -483,6 +487,9 @@ def decode_tag(tag: bytes):
     object_hash = lines[0][7:]
     commit_type = lines[1][5:]
     tag_version = lines[2][4:]
+    if len(lines) < 4:  # In rare cases, tagger info is missing
+        return (object_hash, commit_type, tag_version, '', '', '')
+
     _splited = lines[3].split(' ')
     timestamp = _splited[len(_splited)-2]  # negative index will not work with wraparound=False
     timezone = _splited[len(_splited)-1]
