@@ -122,7 +122,10 @@ def test_blob_1(woc):
 def test_blob_2(woc):
     res = woc.show_content("blob", "46aaf071f1b859c5bf452733c2583c70d92cd0c8")
     assert len(res) == 1236
-
+    
+def test_tag(woc):
+    res = woc.show_content("tag", "08af22b7de836a5fef0f9947a5f0894d371742de")
+    assert res[0] == '3366f276c63b17a3d78865e12f6d94595f87bb18'
 
 def test_count(woc):
     res = woc.count("blob")

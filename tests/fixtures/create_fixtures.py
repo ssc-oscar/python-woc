@@ -86,7 +86,11 @@ class WocMapsCopier(WocMapsLocal):
 
     def copy_values(self, map_name, key):
         """One large file can only contain one record"""
-        value, _ = self._get_tch_bytes(map_name, key)
+        try:
+            value, _, _ = self._get_tch_bytes(map_name, key)
+        except ValueError:
+            print(self._get_tch_bytes(map_name, key))
+            raise
 
         if map_name in self.config2["maps"]:
             _map = self.config2["maps"][map_name][0]
@@ -132,21 +136,10 @@ class WocMapsCopier(WocMapsLocal):
 
     def copy_content(self, obj: str, key: Union[bytes, str]):
         """One blob shard can only contain one record"""
-        value, _ = self._get_tch_bytes(obj, key)
+        value, _, _ = self._get_tch_bytes(obj, key)
 
-        if obj == "tree":
-            _map_obj = self.config2["objects"]["tree.tch"]
-            print("writing to tch", key, _map_obj["sharding_bits"])
-            write_to_tch(
-                bytes.fromhex(key),
-                value,
-                _map_obj["shards"],
-                _map_obj["sharding_bits"],
-                use_fnv_keys=False,
-            )
-
-        elif obj == "commit":
-            _map_obj = self.config2["objects"]["commit.tch"]
+        if obj in ("tree", "commit", "tag"):
+            _map_obj = self.config2["objects"][f"{obj}.tch"]
             print("writing to tch", key, _map_obj["sharding_bits"])
             write_to_tch(
                 bytes.fromhex(key),
@@ -162,7 +155,10 @@ class WocMapsCopier(WocMapsLocal):
             offset, length = self._get_pos("blob", key)
             _map_obj = self.config["objects"]["blob.bin"]
             shard = get_shard(key, _map_obj["sharding_bits"], use_fnv_keys=False)
-            with open(_map_obj["shards"][shard], "rb") as f:
+            _p = _map_obj["shards"][shard]
+            if isinstance(_p, dict):
+                _p = _p["path"]
+            with open(_p, "rb") as f:
                 f.seek(offset)
                 _v = f.read(length)
             # write tch
@@ -209,7 +205,7 @@ if __name__ == "__main__":
     # cp.copy_values('c2cc', 'e4af89166a17785c1d741b8b1d5775f3223f510f') # null
     cp.copy_values("a2f", "Audris Mockus <audris@utk.edu>")
     cp.copy_values("c2f", "e4af89166a17785c1d741b8b1d5775f3223f510f")
-    cp.copy_values("c2b", "e4af89166a17785c1d741b8b1d5775f3223f510f")
+    # cp.copy_values("c2b", "e4af89166a17785c1d741b8b1d5775f3223f510f")
     cp.copy_values("p2c", "ArtiiQ_PocketMine-MP")
     cp.copy_values("f2a", "youtube-statistics-analysis.pdf")
     cp.copy_values("b2f", "05fe634ca4c8386349ac519f899145c75fff4169")
@@ -238,3 +234,6 @@ if __name__ == "__main__":
     cp.copy_content("tree", "1cf86145b4a9492ebbe0fa640638504946315ca6")
     cp.copy_content("tree", "29a422c19251aeaeb907175e9b3219a9bed6c616")
     cp.copy_content("tree", "51968a7a4e67fd2696ffd5ccc041560a4d804f5d")
+    # copy tag
+    cp.copy_content("tag", "08af22b7de836a5fef0f9947a5f0894d371742de")
+    cp.copy_content("tag", "8878cb40eaac07818e1e6c8d5e4b21660c9a8432")

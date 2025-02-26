@@ -316,6 +316,13 @@
           "./tests/fixtures/commit_1.tch"
         ]
       },
+      "tag.tch": {
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/tag_0.tch",
+          "./tests/fixtures/tag_1.tch"
+        ]
+      },
       "blob.idx": {
         "sharding_bits": 1,
         "shards": [
