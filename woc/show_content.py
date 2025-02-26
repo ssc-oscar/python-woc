@@ -7,6 +7,10 @@
 from .local import WocMapsLocal, decode_commit, decode_str, decomp_or_raw
 
 
+def format_tag(sha: str, body: list):
+    return ";".join([sha, body[0]])
+
+
 def format_tree(tree_objs: list) -> str:
     _out = ""
     for line in tree_objs:
@@ -133,6 +137,9 @@ if __name__ == "__main__":
             elif args.type == "blob":
                 obj = woc.show_content(args.type, key)
                 print(obj)
+            elif args.type == "tag":
+                obj = woc.show_content(args.type, key)
+                print(format_tag(key, obj))
             else:
                 raise ValueError(f"Invalid object type {args.type}")
         except BrokenPipeError:

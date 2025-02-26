@@ -472,6 +472,24 @@ def decode_commit(
         _message,
     )
 
+def decode_tag(tag: bytes):
+    """
+    Decode git tag objects into tuples.
+    >>> decode_tag(b'object fcadcb9366d4a011039e384affa10961e99cf2c4\ntype commit\ntag eccube-2.11.1\ntagger nanasess <nanasess@42d9b83e-2207-4a45-8b47-68c1da84f352> 1303788649 +0000\n\nAdded tags/eccube-2.11.1\n')
+    ('fcadcb9366d4a011039e384affa10961e99cf2c4', 'commit', 'eccube-2.11.1', 'nanasess <nanasess@42d9b83e-2207-4a45-8b47-68c1da84f352>'
+    , '1303788649', '+0000')
+    """
+    lines = decode_str(tag).splitlines()
+    object_hash = lines[0][7:]
+    commit_type = lines[1][5:]
+    tag_version = lines[2][4:]
+    _splited = lines[3].split(' ')
+    timestamp = _splited[len(_splited)-2]  # negative index will not work with wraparound=False
+    timezone = _splited[len(_splited)-1]
+    tagger_info = ' '.join(_splited[1:len(_splited)-2])
+    return (object_hash, commit_type, tag_version, tagger_info, timestamp, timezone)
+
+
 # def decode_commit(cmt: bytes):
 #     """
 #     Decode git commit objects into tuples
@@ -703,6 +721,8 @@ class WocMapsLocal(WocMapsBase):
                 self._lookup['commit'] = _o
             elif _o.name == 'sha1.blob.tch':
                 self._lookup['blob'] = _o
+            elif _o.name == 'tag.tch':
+                self._lookup['tag'] = _o
 
     def _get_tch_bytes(
         self, map_name, key, cursor=0
@@ -921,11 +941,14 @@ class WocMapsLocal(WocMapsBase):
             return decode_str(decomp_or_raw(_out_bin))
 
         elif obj_name == 'tkns':
-            raise NotImplemented
+            raise NotImplementedError()
         elif obj_name == 'tag':
-            raise NotImplemented
+            _ret = decode_tag(decomp_or_raw(self._get_tch_bytes(obj_name, key)[0]))
+            if self._is_debug_enabled:
+                self._logger.debug(f"decode tag: len={len(_ret)} in {(time.time_ns() - start_time) / 1e6:.2f}ms")
+            return _ret
         elif obj_name == 'bdiff':
-            raise NotImplemented
+            raise NotImplementedError()
         else:
             raise ValueError(f'Unsupported object type: {obj_name}, expected one of tree, blob, commit, tkns, tag, bdiff')
 
