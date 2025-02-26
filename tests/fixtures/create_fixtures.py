@@ -237,3 +237,4 @@ if __name__ == "__main__":
     # copy tag
     cp.copy_content("tag", "08af22b7de836a5fef0f9947a5f0894d371742de")
     cp.copy_content("tag", "8878cb40eaac07818e1e6c8d5e4b21660c9a8432")
+    cp.copy_values("c2tag", "fcadcb9366d4a011039e384affa10961e99cf2c4")

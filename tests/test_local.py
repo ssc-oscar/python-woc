@@ -126,6 +126,10 @@ def test_blob_2(woc):
 def test_tag(woc):
     res = woc.show_content("tag", "08af22b7de836a5fef0f9947a5f0894d371742de")
     assert res[0] == '3366f276c63b17a3d78865e12f6d94595f87bb18'
+    
+def test_c2tag(woc):
+    res = woc.get_values("c2tag", "fcadcb9366d4a011039e384affa10961e99cf2c4")
+    assert res[0] == 'eccube-2.11.1'
 
 def test_count(woc):
     res = woc.count("blob")
@@ -134,7 +138,6 @@ def test_count(woc):
     assert res == 12
     res = woc.count("commit")
     assert res == 7
-
 
 def test_all_keys(woc):
     res = list(woc.all_keys("blob"))
