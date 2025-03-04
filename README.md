@@ -23,7 +23,7 @@ Mappings below are supported by both `woc.get_values` and `woc.objects`:
 And objects:
 
 ```python
-['commit', 'tree', 'blob']
+['commit', 'tree', 'blob', 'tag']
 ```
 
 If you are still unsure what characters in the mappings mean, checkout the [WoC Tutorial](https://github.com/woc-hack/tutorial?tab=readme-ov-file#activity-3---investigate-the-maps).
@@ -46,16 +46,29 @@ pip3 install python-woc
 
 ### From Source
 
-To try out latest features, you may install python-woc from source:
+You can also install `python-woc` from source. First, clone the repository:
 
 ```bash
 git clone https://github.com/ssc-oscar/python-woc.git
 cd python-woc
-python3 -m pip install -r requirements.txt
-python3
+```
+
+We use poetry as the package manager. You can install it with:
+
+```bash
+curl -sSL https://install.python-poetry.org | python3 -
+```
+
+Then install the dependencies and the package:
+
+```bash
+poetry install
 ```
 
 ## Generate Profiles
+
+> [!NOTE]
+> If you are on UTK/PKU WoC servers, you can skip this step. Profiles are already generated and available at `/home/wocprofile.json` or `/etc/wocprofile.json`.
 
 One of the major improvents packed in python-woc is profile. Profiles tell the driver what versions of what maps are available, decoupling the driver from the folder structure of the data. It grants the driver the ability to work with multiple versions of WoC, on a different machine, or even on the cloud.
 
