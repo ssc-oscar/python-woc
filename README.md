@@ -53,17 +53,15 @@ git clone https://github.com/ssc-oscar/python-woc.git
 cd python-woc
 ```
 
-We use poetry as the package manager. You can install it with:
+We use poetry as the package manager. Setting up using poetry:
 
 ```bash
-curl -sSL https://install.python-poetry.org | python3 -
+python3 -m pip install poetry
+python3 -m poetry install
 ```
 
-Then install the dependencies and the package:
-
-```bash
-poetry install
-```
+> [!TIP]
+> On some UTK servers, installing poetry yields the following error: `urllib3 v2 only supports OpenSSL 1.1.1+`. A workaround is to run `python3 -m pip install 'urllib3<2.0'` before installing poetry.
 
 ## Generate Profiles
 
