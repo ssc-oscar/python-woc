@@ -5,12 +5,10 @@ description = "Python interface for World of Code"
 authors = ["Runzhi He <rzhe@pku.edu.cn>", "Marat <marat@cmu.edu>"]
 license = "GPL-3.0"
 readme = "README.md"
-packages = [
-    { include = "woc" }
-]
+packages = [{ include = "woc" }]
 include = [
     { path = "woc/**/*.so", format = "wheel" },
-    { path = "lib/*", format = "sdist" }
+    { path = "lib/*", format = "sdist" },
 ]
 
 [tool.poetry.build]
@@ -23,6 +21,7 @@ python-lzf = "^0.2.4"
 chardet = "^5.2.0"
 tqdm = "^4.65.0"
 rapidgzip = "^0.14.3"
+httpx = "^0.28.1"
 
 [tool.poetry.group.build.dependencies]
 cython = "^0.29.0"
@@ -30,16 +29,17 @@ cython = "^0.29.0"
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2.2"
 pytest-cov = "^5.0.0"
-coverage = {extras = ["toml"], version = "^7.5.3"}
+pytest-asyncio = "^0.21.0"
+coverage = { extras = ["toml"], version = "^7.5.3" }
 # bandit = "^1.7.8"
 # docformatter = "^1.7.5"
-ruff = "^0.8.4"  # <- ruff is powerful enough to be the only linter
+ruff = "^0.8.4" # <- ruff is powerful enough to be the only linter
 # sphinx = "^7.1.2"
 # sphinx-rtd-theme = "^1.0.0"
 # sphinx-autobuild = "^2021.3.14"
 # sphinx-pyproject = "^0.3.0"
 # sphinx-autodoc-typehints = "^1.25.3"
-pdoc = "^14.5.0" # <- drop sphinx, too many deps and rst is not fun
+pdoc = "^14.5.0"    # <- drop sphinx, too many deps and rst is not fun
 pre-commit = "^3.5"
 mypy = "^1.5.0"
 
@@ -51,16 +51,17 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 addopts = "-ra -q"
-testpaths = [
-    "tests",
-]
+testpaths = ["tests"]
+markers = ["asyncio"]
+asyncio_mode="auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.report]
 show_missing = true
-omit = [ "tests/*" ]
+omit = ["tests/*"]
 
 [tool.coverage.run]
-plugins = [ "Cython.Coverage" ]
+plugins = ["Cython.Coverage"]
 
 ### Documentation ###
 
@@ -80,11 +81,7 @@ plugins = [ "Cython.Coverage" ]
 [tool.ruff]
 target-version = "py38"
 line-length = 90
-extend-exclude = [
-    "__pycache__",
-    "build",
-    "dist",
-]
+extend-exclude = ["__pycache__", "build", "dist"]
 
 [tool.ruff.lint]
 # rules ref: https://docs.astral.sh/ruff
@@ -132,5 +129,5 @@ ignore = ["E203", "E501", "E741"]
     "D",
     "F405",
     "F403",
-    "F841"
+    "F841",
 ]

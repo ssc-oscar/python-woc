@@ -1,6 +1,6 @@
 import difflib
-import re
 import os
+import re
 import warnings
 from datetime import datetime, timedelta, timezone
 from functools import cached_property, lru_cache
@@ -173,7 +173,7 @@ class Author(_NamedObject):
     @property
     def authors(self):
         raise NotImplementedError("Author object does not have authors method")
-    
+
     @property
     def aliases(self) -> List["Author"]:
         _unique_authors = self.unique_authors
@@ -753,37 +753,45 @@ class Project(_NamedObject):
     @property
     def projects(self) -> List["Project"]:
         raise NotImplementedError("Project object does not have projects method")
-    
+
     def download_blob(self, blob_sha: str) -> str:
         """
         Download the blob content from remote.
         """
         try:
-            import requests
             from urllib.parse import quote_plus
-        except ImportError:
-            raise ImportError("This function requires the requests module. Install it via `pip install requests`")
 
-        if self._platform_repo[0] == 'github.com':
+            import requests
+        except ImportError:
+            raise ImportError(
+                "This function requires the requests module. Install it via `pip install requests`"
+            )
+
+        if self._platform_repo[0] == "github.com":
             project = self._platform_repo[1]
-            _r = requests.get(f'https://api.github.com/repos/{project}/git/blobs/{blob_sha}', 
-                    allow_redirects=True,
-                    headers={'Accept': 'application/vnd.github.raw+json'})
+            _r = requests.get(
+                f"https://api.github.com/repos/{project}/git/blobs/{blob_sha}",
+                allow_redirects=True,
+                headers={"Accept": "application/vnd.github.raw+json"},
+            )
             _r.raise_for_status()
             return _r.content
-        elif self._platform_repo[0] == 'gitlab.com':
+        elif self._platform_repo[0] == "gitlab.com":
             if not hasattr(self, "gitlab_project_id"):
                 project = quote_plus(self._platform_repo[1])
-                r = requests.get(f'https://gitlab.com/api/v4/projects/{project}')
+                r = requests.get(f"https://gitlab.com/api/v4/projects/{project}")
                 r.raise_for_status()
-                self.gitlab_project_id = r.json()['id']
-            _r = requests.get(f'https://gitlab.com/api/v4/projects/{self.gitlab_project_id}/repository/blobs/{blob_sha}/raw', 
-                    allow_redirects=True)
+                self.gitlab_project_id = r.json()["id"]
+            _r = requests.get(
+                f"https://gitlab.com/api/v4/projects/{self.gitlab_project_id}/repository/blobs/{blob_sha}/raw",
+                allow_redirects=True,
+            )
             _r.raise_for_status()
             return _r.content
         else:
-            raise NotImplementedError("The function is not implemented for " + self._platform_repo[0])
-        
+            raise NotImplementedError(
+                "The function is not implemented for " + self._platform_repo[0]
+            )
 
     def save(self, path: str, commit: Optional[Commit] = None):
         """
@@ -796,7 +804,9 @@ class Project(_NamedObject):
             try:
                 commit = self.head
             except ValueError:
-                _logger.warning(f"No head commit found for {self.key}, using latest commit")
+                _logger.warning(
+                    f"No head commit found for {self.key}, using latest commit"
+                )
                 commit = self.latest_commit
 
         flist = list(commit.tree.traverse())
@@ -804,13 +814,13 @@ class Project(_NamedObject):
             _logger.debug(f"{idx + 1}/{len(flist)}: {f.path}")
             _p = os.path.join(path, f.path)
             os.makedirs(os.path.dirname(_p), exist_ok=True)
-            with open(_p, 'wb') as f:
+            with open(_p, "wb") as f:
                 try:
                     f.write(blob.data.encode())
-                except KeyError as e:
+                except KeyError:
                     _logger.info(f"Missing blob {blob.key}")
                     try:
-                        if self._platform_repo[0] in ('github.com', 'gitlab.com'):
+                        if self._platform_repo[0] in ("github.com", "gitlab.com"):
                             f.write(self.download_blob(blob.hash))
                     except Exception as e:
                         _logger.error(f"Failed to download blob {blob.hash}: {e}")
