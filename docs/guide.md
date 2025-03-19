@@ -1,6 +1,6 @@
 > [!NOTE] This guide is for users who have the access to UTK / PKU WoC servers. If you don't have access, apply [here](https://docs.google.com/forms/d/e/1FAIpQLSd4vA5Exr-pgySRHX_NWqLz9VTV2DB6XMlR-gue_CQm51qLOQ/viewform?vc=0&c=0&w=1&flr=0&usp=mail_form_link) or send an email to [Audris Mockus](mailto:audris@utk.edu).
 
-### Task 1: Install the python package
+## Task 1: Install the python package
 
 python-woc is available on PyPI. For most users, the following command is enough:
 
@@ -15,7 +15,7 @@ python3 -m pip install -U python-woc
     [33mWARNING: Error parsing requirements for certifi: [Errno 2] No such file or directory: '/export/data/play/rzhe/miniforge3/lib/python3.10/site-packages/certifi-2023.11.17.dist-info/METADATA'[0m[33m
     [0m
 
-### Task 2: Basic operations
+## Task 2: Basic operations
 
 Let's start by initializing a local WoC client:
 (If you want to specify the version of maps to query, pass a version parameter to the constructor.)
@@ -99,7 +99,7 @@ pprint([(m.name, m.version) for m in woc.maps])
      ...]
 
 
-### Task 3: Determine the author of the parent commit for commit 009d7b6da9c4419fe96ffd1fffb2ee61fa61532a
+## Task 3: Determine the author of the parent commit for commit 009d7b6da9c4419fe96ffd1fffb2ee61fa61532a
 
 It's time for some hand on tasks. The python client supports three types of API:
 
@@ -159,7 +159,7 @@ Commit('009d7b6da9c4419fe96ffd1fffb2ee61fa61532a').parents[0].author
 
 
 
-### Task 4: Find out who and when first commited "Hello World"
+## Task 4: Find out who and when first commited "Hello World"
 
 
 Let's dive deeper into a more real-world senario. Git stores files as blobs, indexed by the SHA-1 hash of the content (with a prefix indicating the type of the object):
@@ -213,7 +213,7 @@ print('Project:', c.projects[0].url)
     Project: https://github.com/robblack007/scripts-beagleboard
 
 
-### Task 5: Find the aliases of the author
+## Task 5: Find the aliases of the author
 
 
 WoC has algorithms to detect aliases of authors and forks of projects. "A" represents unique author IDs. Here we find the aliases of the author "Roberto Cadena Vega <robblack00_7@hotmail.com>":
@@ -249,7 +249,7 @@ Author('Roberto Cadena Vega <robblack00_7@hotmail.com>').aliases
 
 
 
-### Task 6: List the files in 'team-combinatorics_shuwashuwa-server' and save them to a directory
+## Task 6: List the files in 'team-combinatorics_shuwashuwa-server' and save them to a directory
 
 We know tree represents the directory structure of the project at a certain point in time. We can list all the blobs in the tree:
 

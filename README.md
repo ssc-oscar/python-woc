@@ -149,7 +149,7 @@ Sometimes you may want to know the exact size of WoC, doing so is easy and quick
 44613280
 ```
 
-More examples can be found in the [guide](https://ssc-oscar.github.io/python-woc/woc.html#guide-local).
+👉🏻 More examples can be found in the [guide](https://ssc-oscar.github.io/python-woc/woc.html#guide-local).
 
 ## Use Python Objects API
 
@@ -187,7 +187,7 @@ For more, check `woc.objects` in the documentation.
 ('1410029988', 'Audris Mockus <audris@utk.edu>', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
 ```
 
-Read the [guide](https://ssc-oscar.github.io/python-woc/woc.html#guide-remote) for more details.
+👉🏻 Read the [guide](https://ssc-oscar.github.io/python-woc/woc.html#guide-remote) for more details.
 
 ## Contributing
 

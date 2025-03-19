@@ -1,11 +1,11 @@
-### Task 1: Install the python package
+## Task 1: Install the python package
 
 Starting from 0.3.0, python-woc supports the HTTP API! You are not limited by the access to PKU or UTK servers. 
 First, let us install or upgrade the python package:
 
 
-```python
-!python3 -m pip install -U python-woc
+```bash
+python3 -m pip install -U python-woc
 ```
 
     Looking in indexes: https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -25,7 +25,7 @@ First, let us install or upgrade the python package:
     Requirement already satisfied: typing-extensions>=4.1 in /home/hrz/mambaforge/envs/woc/lib/python3.8/site-packages (from anyio->httpx<0.29.0,>=0.28.1->python-woc) (4.12.2)
 
 
-### Task 2 (Optional): Generate an API key
+## Task 2 (Optional): Generate an API key
 
 This is an optional step but I recommend you to do it. By default HTTP API restricts the number of requests per minute to avoid abuse. To raise the limit, you can generate an API key on the World of Code website.
 
@@ -46,7 +46,7 @@ woca = WocMapsRemoteAsync(
 )
 ```
 
-### Task 3: Use the python package
+## Task 3: Use the python package
 
 The sync remote client feels the same as the local client, and most APIs will just work:
 
@@ -232,7 +232,7 @@ woc.all_keys('c2p')
     NotImplementedError: all_keys is not implemented in WoC HTTP API. If you feel it is necessary, please create a feature request at https://github.com/ssc-oscar/python-woc/issues/new
 
 
-### Task 4: Batching
+## Task 4: Batching
 
 Git objects are typically small, and sending dozens of small queries is not efficient. The remote client supports batching by `show_content_many` and `get_values_many`, it will send 10 queries in one request. For the impatient, it displays a progress bar with `progress=True`. The return value is a tuple of 2 dictionaries { results }, { errors }.
 
@@ -398,7 +398,7 @@ woc.get_values_many('c2b', woc.get_values('P2c', 'user2589_minicms')[:50], progr
 
 
 
-### Task 5: Go Async
+## Task 5: Go Async
 
 The remote client also supports async API, which is useful when you are running multiple requests in parallel. APIs are similar to the sync ones, but with `await` in front of them.
 
