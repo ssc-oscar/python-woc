@@ -149,6 +149,8 @@ Sometimes you may want to know the exact size of WoC, doing so is easy and quick
 44613280
 ```
 
+More examples can be found in the [guide](https://ssc-oscar.github.io/python-woc/woc.html#guide-local).
+
 ## Use Python Objects API
 
 The objects API provides a more intuitive way to access the WoC data. 
@@ -175,6 +177,17 @@ Tree(836f04d5b374033b1608269e2f3aaabae263a0db)
 ```
 
 For more, check `woc.objects` in the documentation.
+
+### Remote Access
+
+```python
+>>> from woc.remote import WocMapsRemote
+>>> woc = WocMapsRemote(base_url="https://woc.osslab-pku.org/api", api_key="woc-api-key")
+>>> woc.get_values("b2fa", "05fe634ca4c8386349ac519f899145c75fff4169")
+('1410029988', 'Audris Mockus <audris@utk.edu>', 'e4af89166a17785c1d741b8b1d5775f3223f510f')
+```
+
+Read the [guide](https://ssc-oscar.github.io/python-woc/woc.html#guide-remote) for more details.
 
 ## Contributing
 

@@ -9,6 +9,10 @@
 .. include:: ../README.md
    :start-line: 4
    :end-before: ## Contributing
+# Guide (Local)
+.. include:: ../docs/guide.md
+# Guide (Remote)
+.. include:: ../docs/guide_remote.md
 # To Contribute
 .. include:: ../docs/contributing.md
 # World of Code Tutorial
@@ -18,7 +22,7 @@
 
 """  # noqa: D205
 
-__all__ = ["local", "tch", "detect", "objects"]
+__all__ = ["local", "tch", "detect", "objects", "remote"]
 
 import importlib.metadata
 
