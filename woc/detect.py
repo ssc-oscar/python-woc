@@ -118,11 +118,11 @@ def infer_dtype(map_name: str) -> Tuple[str, str]:
         dtype_in = "h"
     if ent_out in ("c", "b", "cc", "pc", "ob", "td"):
         dtype_out = "h"
-    if ent_all in ("b2fa", "c2tag"):
+    if ent_all in ("b2fa"):
         dtype_out = "sh"
-    if ent_out in ("ta",):
+    if ent_out in ("ta", "tag"):
         dtype_out = "s"
-    if ent_all in ("b2tk", "td2f"):
+    if ent_all in ("b2tk", "td2f",):
         dtype_out = "s"
     if ent_all in ("c2h", "c2r"):
         dtype_out = "r"
@@ -140,7 +140,7 @@ def infer_dtype(map_name: str) -> Tuple[str, str]:
         dtype_in, dtype_out = "h", "cs3"
     if ent_all in ("c2dat",):
         dtype_in, dtype_out = "h", "s"
-    if ent_all in ("b2tac",):
+    if ent_all in ("b2tac", "b2cff"):
         dtype_in, dtype_out = "h", "cs3"
 
     return dtype_in, dtype_out
