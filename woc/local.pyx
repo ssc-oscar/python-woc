@@ -808,7 +808,12 @@ class WocMapsLocal(WocMapsBase):
         ['05cf84081b63cda822ee407e688269b494a642de', ...]
         """
         _bytes, decode_dtype, next_cursor = self._get_tch_bytes(map_name, key)
-        _decoded = decode_value(_bytes, decode_dtype)
+        if map_name == 'commit.tch':
+            _decoded = [decode_commit(decomp_or_raw(_bytes))]
+        elif map_name == 'tree.tch':
+            _decoded = [decode_tree(decomp_or_raw(_bytes))]
+        else:
+            _decoded = decode_value(_bytes, decode_dtype)
 
         for v in _decoded:
             yield v

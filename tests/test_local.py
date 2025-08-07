@@ -122,14 +122,31 @@ def test_blob_1(woc):
 def test_blob_2(woc):
     res = woc.show_content("blob", "46aaf071f1b859c5bf452733c2583c70d92cd0c8")
     assert len(res) == 1236
-    
+
+
 def test_tag(woc):
     res = woc.show_content("tag", "08af22b7de836a5fef0f9947a5f0894d371742de")
-    assert res[0] == '3366f276c63b17a3d78865e12f6d94595f87bb18'
-    
+    assert res[0] == "3366f276c63b17a3d78865e12f6d94595f87bb18"
+
+
 def test_c2tag(woc):
     res = woc.get_values("c2tag", "fcadcb9366d4a011039e384affa10961e99cf2c4")
-    assert res[0] == 'eccube-2.11.1'
+    assert res[0] == "eccube-2.11.1"
+
+
+def test_commit_tch(woc):
+    res = woc.get_values("commit.tch", "898d5a21241aaf16acf92566aa34103d06cf2ac6")
+    assert res[0][0] == "e5798457aebae7c84eff7b80b50c3a938cc4cb63"
+
+
+def test_tree_tch(woc):
+    res = woc.get_values("tree.tch", "51968a7a4e67fd2696ffd5ccc041560a4d804f5d")
+    assert res[0][0] == (
+        "100644",
+        "Dockerfile",
+        "9abdd1032c7cc49568d22bf45673f30ddb159efc",
+    )
+
 
 def test_count(woc):
     res = woc.count("blob")
@@ -138,6 +155,7 @@ def test_count(woc):
     assert res == 12
     res = woc.count("commit")
     assert res == 7
+
 
 def test_all_keys(woc):
     res = list(woc.all_keys("blob"))

@@ -98,9 +98,12 @@ class WocMapsCopier(WocMapsLocal):
             _map = self.config2["objects"][map_name]
         else:
             raise KeyError(
-                f'Invalid map name: {map_name}, '
-                f'expect one of {", ".join(self.config2["maps"].keys())}'
+                f"Invalid map name: {map_name}, "
+                f"expect one of {', '.join(self.config2['maps'].keys())}"
             )
+
+        if "dtypes" not in _map:
+            _map["dtypes"] = ["h", "c?"]
 
         if _map["dtypes"][0] == "h":
             if isinstance(key, str):
@@ -186,9 +189,6 @@ class WocMapsCopier(WocMapsLocal):
 
 
 if __name__ == "__main__":
-    import glob
-    import os
-
     for f in glob.glob("./tests/fixtures/*.tch*") + glob.glob("./tests/fixtures/*.bin"):
         print("removing", f)
         os.remove(f)
@@ -238,3 +238,9 @@ if __name__ == "__main__":
     cp.copy_content("tag", "08af22b7de836a5fef0f9947a5f0894d371742de")
     cp.copy_content("tag", "8878cb40eaac07818e1e6c8d5e4b21660c9a8432")
     cp.copy_values("c2tag", "fcadcb9366d4a011039e384affa10961e99cf2c4")
+    cp.copy_values("commit.tch", "0d8228bb25ce89c7e731c7410bc8c5a4e2636e52")
+    cp.copy_values("commit.tch", "898d5a21241aaf16acf92566aa34103d06cf2ac6")
+    cp.copy_values("commit.tch", "91f4da4c173e41ffbf0d9ecbe2f07f3a3296933c")
+    cp.copy_values("commit.tch", "ae6e15fa4d8d4d454977ddbb4e97e922ddecebf7")
+    cp.copy_values("commit.tch", "f249b14a111279faa8d65c29ecf46bb6ce59a139")
+    cp.copy_values("tree.tch", "51968a7a4e67fd2696ffd5ccc041560a4d804f5d")
