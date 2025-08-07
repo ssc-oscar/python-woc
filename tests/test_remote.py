@@ -1,20 +1,29 @@
 import os
 
+import httpx
 import pytest
 
 from woc.remote import WocMapsRemote, WocMapsRemoteAsync
 
-WOC_BASE_URL = os.getenv("WOC_BASE_URL") or "https://wocapi-preview.osslab-pku.org"
+WOC_BASE_URL = os.getenv("WOC_BASE_URL") or "https://worldofcode.org/api"
 
 
 @pytest.fixture
 def woca():
-    return WocMapsRemoteAsync(base_url=WOC_BASE_URL)
+    try:
+        httpx.get(WOC_BASE_URL, timeout=5)
+        return WocMapsRemoteAsync(base_url=WOC_BASE_URL)
+    except httpx.TransportError:
+        pytest.skip("Remote WoC server is not available")
 
 
 @pytest.fixture
 def woc():
-    return WocMapsRemote(base_url=WOC_BASE_URL)
+    try:
+        httpx.get(WOC_BASE_URL, timeout=5)
+        return WocMapsRemote(base_url=WOC_BASE_URL)
+    except httpx.TransportError:
+        pytest.skip("Remote WoC server is not available")
 
 
 @pytest.mark.asyncio
