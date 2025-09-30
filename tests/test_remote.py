@@ -13,8 +13,8 @@ def woca():
     try:
         httpx.get(WOC_BASE_URL, timeout=5)
         return WocMapsRemoteAsync(base_url=WOC_BASE_URL)
-    except httpx.TransportError:
-        pytest.skip("Remote WoC server is not available")
+    except httpx.TransportError as e:
+        pytest.skip(f"Remote WoC server is not available: {e}")
 
 
 @pytest.fixture
@@ -22,8 +22,8 @@ def woc():
     try:
         httpx.get(WOC_BASE_URL, timeout=5)
         return WocMapsRemote(base_url=WOC_BASE_URL)
-    except httpx.TransportError:
-        pytest.skip("Remote WoC server is not available")
+    except httpx.TransportError as e:
+        pytest.skip(f"Remote WoC server is not available: {e}")
 
 
 @pytest.mark.asyncio
