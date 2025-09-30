@@ -119,10 +119,13 @@ def infer_dtype(map_name: str) -> Tuple[str, str]:
     if ent_out in ("c", "b", "cc", "pc", "ob", "td"):
         dtype_out = "h"
     if ent_all in ("b2fa"):
-        dtype_out = "sh"
+        dtype_out = "cs3"
     if ent_out in ("ta", "tag"):
         dtype_out = "s"
-    if ent_all in ("b2tk", "td2f",):
+    if ent_all in (
+        "b2tk",
+        "td2f",
+    ):
         dtype_out = "s"
     if ent_all in ("c2h", "c2r"):
         dtype_out = "r"
@@ -142,7 +145,8 @@ def infer_dtype(map_name: str) -> Tuple[str, str]:
         dtype_in, dtype_out = "h", "s"
     if ent_all in ("b2tac", "b2cff"):
         dtype_in, dtype_out = "h", "cs3"
-
+    if ent_all in ("po2pn",):
+        dtype_in, dtype_out = "s", "cs"
     return dtype_in, dtype_out
 
 
@@ -191,7 +195,7 @@ def detect_profile(
         # we don't want sha1.blob_*.tch files
         if root.endswith("All.sha1"):
             return
-        
+
         _map_name = f"{name}.{ext}"
         prefix_len = int(idx).bit_length() if idx else 0
         _obj = _objs.setdefault(
