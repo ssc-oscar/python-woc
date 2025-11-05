@@ -8,6 +8,7 @@ class WocMapsLocal(WocMapsBase):
         profile_path: Union[str, Iterable[str], None] = None,
         version: Union[str, Iterable[str], None] = None,
         on_large: Literal["ignore", "head", "all"] = "all",
+        on_bad: Literal["allow", "error"] = "allow",
     ) -> None:
         """
         Initialize local WoC maps with a profile.
@@ -17,6 +18,7 @@ class WocMapsLocal(WocMapsBase):
         :param version: version of the profile, default to the latest version.
                         can be a single version like 'R' or a list of versions like ['R', 'U'].
         :param on_large: how to handle large files, default to 'all' (read all content). 'ignore' to ignore large files, 'head' to read only the first chunk.
+        :param on_bad: how to handle bad entries, default to 'allow' (read all entries). 'error' to raise KeyError when a bad entry is accessed.
         """
         ...
 

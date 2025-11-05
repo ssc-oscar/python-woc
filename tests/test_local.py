@@ -185,6 +185,14 @@ def test_exclude_larges(woc):
         woc_nolarge.get_values("b2c", "3f2eca18f1bc0f3117748e2cea9251e5182db2f7")
 
 
+def test_bad_keys():
+    _test_pr = os.path.join(os.path.dirname(__file__), "test_profile.json")
+    woc_err = WocMapsLocal(_test_pr, on_bad="error")
+    with pytest.raises(KeyError):
+        woc_err.get_values("p", "bitzhoumy_helloworld")
+    with pytest.raises(KeyError):
+        woc_err.get_values("c", "3f631f976149d8702d0b1496df7b98f16a9357ed")
+
 _FORK_WOC = None
 
 

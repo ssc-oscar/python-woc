@@ -37,7 +37,6 @@ cdef extern from 'tchdb.h':
     bint tchdboptimize(TCHDB *hdb, int64_t bnum, int8_t apow, int8_t fpow, uint8_t opts); # Optimize the database to reduce space
 
 cdef class TCHashDB:
-    cdef TCHDB * _db
     """Object representing a Tokyocabinet Hash table"""
 
     def __cinit__(self, str path, bint ro=False):

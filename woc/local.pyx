@@ -9,7 +9,7 @@ import logging
 import time
 from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t
 from libc.string cimport memchr, strstr, strchr, strlen, strncmp
-from cpython cimport Py_ssize_t
+from cython cimport Py_ssize_t
 from threading import Lock
 from typing import Tuple, Dict, Iterable, List, Union, Literal, Optional, Generator
 from io import FileIO
@@ -662,6 +662,7 @@ class WocMapsLocal(WocMapsBase):
             profile_path: Union[str, Iterable[str], None] = None,
             version: Union[str, Iterable[str], None] = None,
             on_large: Literal['ignore', 'head', 'all'] = 'all',
+            on_bad: Literal['allow', 'error'] = 'allow',
         ) -> None:
         # init logger
         self._logger = logging.getLogger(__name__)
@@ -731,6 +732,13 @@ class WocMapsLocal(WocMapsBase):
 
         # on_large
         self._on_large = on_large
+        # on_bad
+        self._raise_on_bad = on_bad == 'error'
+        self._bad_keys = {}
+        # build bad keys sets
+        if self._raise_on_bad:
+            for v in self.config["bads"].values():
+                self._bad_keys.update(v)
 
         # build lookup map
         self._lookup: Dict[str, Union[WocObject, WocMap]] = {}
@@ -789,6 +797,11 @@ class WocMapsLocal(WocMapsBase):
         if self._is_debug_enabled:
             self._logger.debug(f"hash: hex={hex_str} in {(time.time_ns() - start_time) / 1e6:.2f}ms")
             start_time = time.time_ns()
+
+        if self._raise_on_bad:
+            reason = self._bad_keys.get(hex_str) if in_dtype == "h" else self._bad_keys.get(key.decode("utf-8"))
+            if reason is not None:
+                raise KeyError(f"Key {hex_str if in_dtype == 'h' else key.decode('utf-8')} is marked as bad: {reason}")
 
         if hasattr(_map, "larges") and hex_str in _map.larges:
             if self._on_large == 'ignore':

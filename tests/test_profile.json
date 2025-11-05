@@ -1,395 +1,397 @@
 {
-    "wocSchemaVersion": 1,
-    "entities": {
-      "a": "author",
-      "A": "author_unalised",
-      "b": "blob",
-      "c": "commit",
-      "cc": "child_commit",
-      "f": "file",
-      "fa": "first_author",
-      "t": "tree",
-      "h": "head",
-      "p": "project",
-      "P": "project_deforked",
-      "pc": "parent_commit",
-      "r": "root_commit",
-      "ta": "time_author",
-      "tac": "time_author_commit",
-      "trp": "torvalds_path",
-      "dat": "colon_seperated_data",
-      "tch": "compressed_data",
-      "bin": "binary_data",
-      "idx": "binary_index"
+  "wocSchemaVersion": 1,
+  "entities": {
+    "a": "author",
+    "A": "author_unalised",
+    "b": "blob",
+    "c": "commit",
+    "cc": "child_commit",
+    "f": "file",
+    "fa": "first_author",
+    "t": "tree",
+    "h": "head",
+    "p": "project",
+    "P": "project_deforked",
+    "pc": "parent_commit",
+    "r": "root_commit",
+    "ta": "time_author",
+    "tac": "time_author_commit",
+    "trp": "torvalds_path",
+    "dat": "colon_seperated_data",
+    "tch": "compressed_data",
+    "bin": "binary_data",
+    "idx": "binary_index"
+  },
+  "dtypes": {
+    "h": "hex",
+    "s": "str",
+    "cs": "[compressed]str",
+    "sh": "str_hex",
+    "hhwww": "hex_hex_url",
+    "r": "hex_berint",
+    "cs3": "[compressed]str_str_str"
+  },
+  "sites": {
+    "bitbucket.org": "bitbucket.org",
+    "gitlab.com": "gitlab.com",
+    "android.googlesource.com": "android.googlesource.com",
+    "bioconductor.org": "bioconductor.org",
+    "drupal.com": "git.drupal.org",
+    "git.eclipse.org": "git.eclipse.org",
+    "git.kernel.org": "git.kernel.org",
+    "git.postgresql.org": "git.postgresql.org",
+    "git.savannah.gnu.org": "git.savannah.gnu.org",
+    "git.zx2c4.com": "git.zx2c4.com",
+    "gitlab.gnome.org": "gitlab.gnome.org",
+    "kde.org": "anongit.kde.org",
+    "repo.or.cz": "repo.or.cz",
+    "salsa.debian.org": "salsa.debian.org",
+    "sourceforge.net": "git.code.sf.net/p"
+  },
+  "bads": {
+    "p": {
+      "bitzhoumy_helloworld": "damaged trees",
+      "thachmai_mobiliPlay": "single repo for torvalds alias"
     },
-    "dtypes": {
-      "h": "hex",
-      "s": "str",
-      "cs": "[compressed]str",
-      "sh": "str_hex",
-      "hhwww": "hex_hex_url",
-      "r": "hex_berint",
-      "cs3": "[compressed]str_str_str"
-    },
-    "sites": {
-      "bitbucket.org": "bitbucket.org",
-      "gitlab.com": "gitlab.com",
-      "android.googlesource.com": "android.googlesource.com",
-      "bioconductor.org": "bioconductor.org",
-      "drupal.com": "git.drupal.org",
-      "git.eclipse.org": "git.eclipse.org",
-      "git.kernel.org": "git.kernel.org",
-      "git.postgresql.org": "git.postgresql.org",
-      "git.savannah.gnu.org": "git.savannah.gnu.org",
-      "git.zx2c4.com": "git.zx2c4.com",
-      "gitlab.gnome.org": "gitlab.gnome.org",
-      "kde.org": "anongit.kde.org",
-      "repo.or.cz": "repo.or.cz",
-      "salsa.debian.org": "salsa.debian.org",
-      "sourceforge.net": "git.code.sf.net/p"
-    },
-    "ignoredAuthors": [
-      "GitHub Merge Button <merge-button@github.com>"
-    ],
-    "maps": {
-      "c2p": [
-        {
-          "version": "U",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/c2pFullU.0.tch",
-            "./tests/fixtures/c2pFullU.1.tch"
-          ],
-          "larges": {},
-          "dtypes": [
-            "h",
-            "cs"
-          ]
-        }
-      ],
-      "c2dat": [
-        {
-          "version": "U",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/c2datFullU.0.tch",
-            "./tests/fixtures/c2datFullU.1.tch"
-          ],
-          "larges": {},
-          "dtypes": [
-            "h",
-            "s"
-          ]
-        }
-      ],
-      "c2ta": [
-        {
-          "version": "R",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/c2taFullR.0.tch",
-            "./tests/fixtures/c2taFullR.1.tch"
-          ],
-          "larges": {},
-          "dtypes": [
-            "h",
-            "s"
-          ]
-        }
-      ],
-      "b2tac": [
-        {
-          "version": "U",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/b2tacFullU.0.tch",
-            "./tests/fixtures/b2tacFullU.1.tch"
-          ],
-          "larges": {
-            "a11777cc471a4344702741ab1c8a588998b1311a": "./tests/fixtures/b2tacFullU.1.tch.large.a11777cc471a4344702741ab1c8a588998b1311a"
-          },
-          "dtypes": [
-            "h",
-            "cs3"
-          ]
-        }
-      ],
-      "p2a": [
-        {
-          "version": "R",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/p2aFullR.0.tch",
-            "./tests/fixtures/p2aFullR.1.tch"
-          ],
-          "larges": {},
-          "dtypes": [
-            "s",
-            "cs"
-          ]
-        }
-      ],
-      "b2c": [
-        {
-          "version": "R",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/b2cFullR.0.tch",
-            "./tests/fixtures/b2cFullR.1.tch"
-          ],
-          "larges": {
-            "3f2eca18f1bc0f3117748e2cea9251e5182db2f7": "./tests/fixtures/b2cFullR.31.tch.large.3f2eca18f1bc0f3117748e2cea9251e5182db2f7"
-          },
-          "dtypes": [
-            "h",
-            "h"
-          ]
-        }
-      ],
-      "a2c": [
-        {
-          "version": "R",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/a2cFullR.0.tch",
-            "./tests/fixtures/a2cFullR.1.tch"
-          ],
-          "larges": {},
-          "dtypes": [
-            "s",
-            "h"
-          ]
-        }
-      ],
-      "c2cc": [
-        {
-          "version": "R",
-          "sharding_bits": 1,
-          "shards": [
-            null,
-            null
-          ],
-          "larges": {},
-          "dtypes": [
-            "h",
-            "h"
-          ]
-        }
-      ],
-      "a2f": [
-        {
-          "version": "R",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/a2fFullR.0.tch",
-            "./tests/fixtures/a2fFullR.1.tch"
-          ],
-          "larges": {
-          },
-          "dtypes": [
-            "s",
-            "cs"
-          ]
-        }
-      ],
-      "c2f": [
-        {
-          "version": "R",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/c2fFullR.0.tch",
-            "./tests/fixtures/c2fFullR.1.tch"
-          ],
-          "larges": {
-          },
-          "dtypes": [
-            "h",
-            "cs"
-          ]
-        }
-      ],
-      "c2b": [
-        {
-          "version": "R",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/c2bFullR.0.tch",
-            "./tests/fixtures/c2bFullR.1.tch"
-          ],
-          "larges": {
-          },
-          "dtypes": [
-            "h",
-            "h"
-          ]
-        }
-      ],
-      "c2tag": [
-        {
-          "version": "R",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/c2tagFullR.0.tch",
-            "./tests/fixtures/c2tagFullR.1.tch"
-          ],
-          "larges": {
-          },
-          "dtypes": [
-            "h",
-            "sh"
-          ]
-        }
-      ],
-      "p2c": [
-        {
-          "version": "R",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/p2cFullR.0.tch",
-            "./tests/fixtures/p2cFullR.1.tch"
-          ],
-          "larges": {},
-          "dtypes": [
-            "s",
-            "h"
-          ]
-        }
-      ],
-      "f2a": [
-        {
-          "version": "R",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/f2aFullR.0.tch",
-            "./tests/fixtures/f2aFullR.1.tch"
-          ],
-          "larges": {},
-          "dtypes": [
-            "s",
-            "cs"
-          ]
-        }
-      ],
-      "b2f": [
-        {
-          "version": "R",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/b2fFullR.0.tch",
-            "./tests/fixtures/b2fFullR.1.tch"
-          ],
-          "larges": {
-          },
-          "dtypes": [
-            "h",
-            "cs"
-          ]
-        }
-      ],
-      "c2r": [
-        {
-          "version": "R",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/c2rFullR.0.tch",
-            "./tests/fixtures/c2rFullR.1.tch"
-          ],
-          "larges": {},
-          "dtypes": [
-            "h",
-            "r"
-          ]
-        }
-      ],
-      "b2fa": [
-        {
-          "version": "U",
-          "sharding_bits": 1,
-          "shards": [
-            "./tests/fixtures/b2faFullU.0.tch",
-            "./tests/fixtures/b2faFullU.1.tch"
-          ],
-          "larges": {},
-          "dtypes": [
-            "h",
-            "sh"
-          ]
-        }
-      ]
-    },
-    "objects": {
-      "tree.tch": {
+    "c": {
+      "3f631f976149d8702d0b1496df7b98f16a9357ed": "2013166 blobs",
+      "14bde94da008ac1c65e0c066ee269315e47c0987": "Completed Search Engine with Cosine Similarity and Champion Lists, storing the entire inverted index in terms, with each term having its own pickle file."
+    }
+  },
+  "maps": {
+    "c2p": [
+      {
+        "version": "U",
         "sharding_bits": 1,
         "shards": [
-          "./tests/fixtures/tree_0.tch",
-          "./tests/fixtures/tree_1.tch"
-        ]
-      },
-      "commit.tch": {
-        "sharding_bits": 1,
-        "shards": [
-          "./tests/fixtures/commit_0.tch",
-          "./tests/fixtures/commit_1.tch"
-        ]
-      },
-      "tag.tch": {
-        "sharding_bits": 1,
-        "shards": [
-          "./tests/fixtures/tag_0.tch",
-          "./tests/fixtures/tag_1.tch"
-        ]
-      },
-      "blob.idx": {
-        "sharding_bits": 1,
-        "shards": [
-          "./tests/fixtures/blob_0.idx",
-          "./tests/fixtures/blob_1.idx"
-        ]
-      },
-      "blob.bin": {
-        "sharding_bits": 1,
-        "shards": [
-          "./tests/fixtures/blob_0.bin",
-          "./tests/fixtures/blob_1.bin"
-        ]
-      },
-      "commit.bin": {
-        "sharding_bits": 1,
-        "shards": [
-          "./tests/fixtures/commit_0.bin",
-          "./tests/fixtures/commit_1.bin"
-        ]
-      },
-      "commit.idx": {
-        "sharding_bits": 1,
-        "shards": [
-          "./tests/fixtures/commit_0.idx",
-          "./tests/fixtures/commit_1.idx"
-        ]
-      },
-      "tree.idx": {
-        "sharding_bits": 0,
-        "shards": [
-          "./tests/fixtures/tree_0.idx"
-        ]
-      },
-      "tree.bin": {
-        "sharding_bits": 0,
-        "shards": [
-          "./tests/fixtures/tree_0.bin"
-        ]
-      },
-      "sha1.blob.tch": {
-        "sharding_bits": 0,
-        "shards": [
-          "./tests/fixtures/sha1.blob.tch"
-        ]
-      },
-      "sha1.commit.tch": {
-        "sharding_bits": 0,
-        "shards": [
-          "./tests/fixtures/sha1.commit.tch"
+          "./tests/fixtures/c2pFullU.0.tch",
+          "./tests/fixtures/c2pFullU.1.tch"
+        ],
+        "larges": {},
+        "dtypes": [
+          "h",
+          "cs"
         ]
       }
+    ],
+    "c2dat": [
+      {
+        "version": "U",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/c2datFullU.0.tch",
+          "./tests/fixtures/c2datFullU.1.tch"
+        ],
+        "larges": {},
+        "dtypes": [
+          "h",
+          "s"
+        ]
+      }
+    ],
+    "c2ta": [
+      {
+        "version": "R",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/c2taFullR.0.tch",
+          "./tests/fixtures/c2taFullR.1.tch"
+        ],
+        "larges": {},
+        "dtypes": [
+          "h",
+          "s"
+        ]
+      }
+    ],
+    "b2tac": [
+      {
+        "version": "U",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/b2tacFullU.0.tch",
+          "./tests/fixtures/b2tacFullU.1.tch"
+        ],
+        "larges": {
+          "a11777cc471a4344702741ab1c8a588998b1311a": "./tests/fixtures/b2tacFullU.1.tch.large.a11777cc471a4344702741ab1c8a588998b1311a"
+        },
+        "dtypes": [
+          "h",
+          "cs3"
+        ]
+      }
+    ],
+    "p2a": [
+      {
+        "version": "R",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/p2aFullR.0.tch",
+          "./tests/fixtures/p2aFullR.1.tch"
+        ],
+        "larges": {},
+        "dtypes": [
+          "s",
+          "cs"
+        ]
+      }
+    ],
+    "b2c": [
+      {
+        "version": "R",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/b2cFullR.0.tch",
+          "./tests/fixtures/b2cFullR.1.tch"
+        ],
+        "larges": {
+          "3f2eca18f1bc0f3117748e2cea9251e5182db2f7": "./tests/fixtures/b2cFullR.31.tch.large.3f2eca18f1bc0f3117748e2cea9251e5182db2f7"
+        },
+        "dtypes": [
+          "h",
+          "h"
+        ]
+      }
+    ],
+    "a2c": [
+      {
+        "version": "R",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/a2cFullR.0.tch",
+          "./tests/fixtures/a2cFullR.1.tch"
+        ],
+        "larges": {},
+        "dtypes": [
+          "s",
+          "h"
+        ]
+      }
+    ],
+    "c2cc": [
+      {
+        "version": "R",
+        "sharding_bits": 1,
+        "shards": [
+          null,
+          null
+        ],
+        "larges": {},
+        "dtypes": [
+          "h",
+          "h"
+        ]
+      }
+    ],
+    "a2f": [
+      {
+        "version": "R",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/a2fFullR.0.tch",
+          "./tests/fixtures/a2fFullR.1.tch"
+        ],
+        "larges": {},
+        "dtypes": [
+          "s",
+          "cs"
+        ]
+      }
+    ],
+    "c2f": [
+      {
+        "version": "R",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/c2fFullR.0.tch",
+          "./tests/fixtures/c2fFullR.1.tch"
+        ],
+        "larges": {},
+        "dtypes": [
+          "h",
+          "cs"
+        ]
+      }
+    ],
+    "c2b": [
+      {
+        "version": "R",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/c2bFullR.0.tch",
+          "./tests/fixtures/c2bFullR.1.tch"
+        ],
+        "larges": {},
+        "dtypes": [
+          "h",
+          "h"
+        ]
+      }
+    ],
+    "c2tag": [
+      {
+        "version": "R",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/c2tagFullR.0.tch",
+          "./tests/fixtures/c2tagFullR.1.tch"
+        ],
+        "larges": {},
+        "dtypes": [
+          "h",
+          "sh"
+        ]
+      }
+    ],
+    "p2c": [
+      {
+        "version": "R",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/p2cFullR.0.tch",
+          "./tests/fixtures/p2cFullR.1.tch"
+        ],
+        "larges": {},
+        "dtypes": [
+          "s",
+          "h"
+        ]
+      }
+    ],
+    "f2a": [
+      {
+        "version": "R",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/f2aFullR.0.tch",
+          "./tests/fixtures/f2aFullR.1.tch"
+        ],
+        "larges": {},
+        "dtypes": [
+          "s",
+          "cs"
+        ]
+      }
+    ],
+    "b2f": [
+      {
+        "version": "R",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/b2fFullR.0.tch",
+          "./tests/fixtures/b2fFullR.1.tch"
+        ],
+        "larges": {},
+        "dtypes": [
+          "h",
+          "cs"
+        ]
+      }
+    ],
+    "c2r": [
+      {
+        "version": "R",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/c2rFullR.0.tch",
+          "./tests/fixtures/c2rFullR.1.tch"
+        ],
+        "larges": {},
+        "dtypes": [
+          "h",
+          "r"
+        ]
+      }
+    ],
+    "b2fa": [
+      {
+        "version": "U",
+        "sharding_bits": 1,
+        "shards": [
+          "./tests/fixtures/b2faFullU.0.tch",
+          "./tests/fixtures/b2faFullU.1.tch"
+        ],
+        "larges": {},
+        "dtypes": [
+          "h",
+          "sh"
+        ]
+      }
+    ]
+  },
+  "objects": {
+    "tree.tch": {
+      "sharding_bits": 1,
+      "shards": [
+        "./tests/fixtures/tree_0.tch",
+        "./tests/fixtures/tree_1.tch"
+      ]
+    },
+    "commit.tch": {
+      "sharding_bits": 1,
+      "shards": [
+        "./tests/fixtures/commit_0.tch",
+        "./tests/fixtures/commit_1.tch"
+      ]
+    },
+    "tag.tch": {
+      "sharding_bits": 1,
+      "shards": [
+        "./tests/fixtures/tag_0.tch",
+        "./tests/fixtures/tag_1.tch"
+      ]
+    },
+    "blob.idx": {
+      "sharding_bits": 1,
+      "shards": [
+        "./tests/fixtures/blob_0.idx",
+        "./tests/fixtures/blob_1.idx"
+      ]
+    },
+    "blob.bin": {
+      "sharding_bits": 1,
+      "shards": [
+        "./tests/fixtures/blob_0.bin",
+        "./tests/fixtures/blob_1.bin"
+      ]
+    },
+    "commit.bin": {
+      "sharding_bits": 1,
+      "shards": [
+        "./tests/fixtures/commit_0.bin",
+        "./tests/fixtures/commit_1.bin"
+      ]
+    },
+    "commit.idx": {
+      "sharding_bits": 1,
+      "shards": [
+        "./tests/fixtures/commit_0.idx",
+        "./tests/fixtures/commit_1.idx"
+      ]
+    },
+    "tree.idx": {
+      "sharding_bits": 0,
+      "shards": [
+        "./tests/fixtures/tree_0.idx"
+      ]
+    },
+    "tree.bin": {
+      "sharding_bits": 0,
+      "shards": [
+        "./tests/fixtures/tree_0.bin"
+      ]
+    },
+    "sha1.blob.tch": {
+      "sharding_bits": 0,
+      "shards": [
+        "./tests/fixtures/sha1.blob.tch"
+      ]
+    },
+    "sha1.commit.tch": {
+      "sharding_bits": 0,
+      "shards": [
+        "./tests/fixtures/sha1.commit.tch"
+      ]
     }
   }
+}

@@ -588,7 +588,7 @@ class Project(_NamedObject):
     _ident = "p"
 
     @cached_property
-    def _platform_repo(self) -> str:
+    def _platform_repo(self) -> Tuple[str, str]:
         URL_PREFIXES = self.woc.config["sites"]
         prefix, body = self.key.split("_", 1)
         if prefix == "sourceforge.net":
