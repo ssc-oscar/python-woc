@@ -45,15 +45,15 @@ jobs:
 
       - name: Run tests
         run: |
-          poetry run pytest -v
+          poetry run pytest -v --ignore=tests/test_remote.py
 
       - name: Measure coverage
-        if : ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
+        if : ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && matrix.python-version == '3.12' }}
         run: |
           poetry run pytest -v --cov --cov-report=xml
 
       - name: Upload to Codecov
-        if : ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
+        if : ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && matrix.python-version == '3.12' }}
         uses: codecov/codecov-action@v4
         with:
           directory: ./coverage/reports/
