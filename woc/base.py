@@ -21,6 +21,25 @@ os.makedirs(WocCachePath, exist_ok=True)
 WocGzipChunkSize = 8 * 1024
 """Chunk size for decoding large maps."""
 
+TreeEntry = Tuple[str, str, str]
+TreeContent = List[TreeEntry]
+CommitContent = Tuple[
+    str, Tuple[str, ...], Tuple[str, str, str], Tuple[str, str, str], str
+]
+TagContent = Tuple[str, str, str, str, str, str]
+BlobContent = str
+RangeContent = Tuple[str, int]
+SequenceContent = List[str]
+MapValue = Union[
+    str,
+    SequenceContent,
+    Tuple[str, str, str],
+    RangeContent,
+    TreeContent,
+    CommitContent,
+    TagContent,
+]
+
 
 @dataclass
 class WocFile:
@@ -75,7 +94,7 @@ class WocMapsBase:
         self,
         map_name: str,
         key: Union[bytes, str],
-    ) -> Union[List[str], Tuple[str, str, str], List[Tuple[str, str, str]]]:
+    ) -> List[MapValue]:
         """
         Eqivalent to getValues in WoC Perl API.
 
@@ -99,9 +118,7 @@ class WocMapsBase:
         self,
         map_name: str,
         key: Union[bytes, str],
-    ) -> Generator[
-        Union[List[str], Tuple[str, str, str], List[Tuple[str, str, str]]], None, None
-    ]:
+    ) -> Generator[MapValue, None, None]:
         """
         Similar to get_values, but returns a generator instead of a list. This is useful when querying large maps (on_large='all').
 
@@ -119,11 +136,7 @@ class WocMapsBase:
         self,
         obj_name: WocObjectsWithContent,
         key: Union[bytes, str],
-    ) -> Union[
-        List[Tuple[str, str, str]],
-        str,
-        Tuple[str, Tuple[str, str, str], Tuple[str, str, str], str],
-    ]:
+    ) -> Union[TreeContent, BlobContent, CommitContent, TagContent]:
         """
         Eqivalent to showCnt in WoC Perl API.
 
