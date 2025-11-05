@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 
 import pytest
@@ -182,3 +183,40 @@ def test_exclude_larges(woc):
     woc_nolarge = WocMapsLocal(_test_pr, on_large="ignore")
     with pytest.raises(KeyError):
         woc_nolarge.get_values("b2c", "3f2eca18f1bc0f3117748e2cea9251e5182db2f7")
+
+
+_FORK_WOC = None
+
+
+def _fork_get_values_worker(queue):
+    global _FORK_WOC
+    queue.put(_FORK_WOC.get_values("c2p", "e4af89166a17785c1d741b8b1d5775f3223f510f")[0])
+
+
+def test_get_values_after_fork():
+    try:
+        ctx = multiprocessing.get_context("fork")
+    except ValueError:
+        pytest.skip("fork start method not available")
+
+    _test_pr = os.path.join(os.path.dirname(__file__), "test_profile.json")
+    woc = WocMapsLocal(_test_pr)
+    assert (
+        woc.get_values("c2p", "e4af89166a17785c1d741b8b1d5775f3223f510f")[0]
+        == "W4D3_news"
+    )
+
+    global _FORK_WOC
+    _FORK_WOC = woc
+
+    queue = ctx.Queue()
+    proc = ctx.Process(target=_fork_get_values_worker, args=(queue,))
+    proc.start()
+
+    value = queue.get(timeout=5)
+    proc.join(timeout=5)
+
+    assert proc.exitcode == 0
+    assert value == "W4D3_news"
+
+    _FORK_WOC = None

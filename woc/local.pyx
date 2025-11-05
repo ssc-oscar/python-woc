@@ -1,4 +1,4 @@
-# cython: language_level=3str, wraparound=False, boundscheck=True, nonecheck=False, profile=True, linetrace=True
+# cython: language_level=3str, wraparound=False, boundscheck=True, nonecheck=False, profile=False, linetrace=False
 # SPDX-License-Identifier: GPL-3.0-or-later
 # @authors: Runzhi He <rzhe@pku.edu.cn>
 # @date: 2024-01-17
@@ -9,6 +9,7 @@ import logging
 import time
 from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t
 from libc.string cimport memchr, strstr, strchr, strlen, strncmp
+from cpython cimport Py_ssize_t
 from threading import Lock
 from typing import Tuple, Dict, Iterable, List, Union, Literal, Optional, Generator
 from io import FileIO
@@ -37,9 +38,10 @@ cpdef uint32_t fnvhash(bytes data):
     # PY: 5.8usec Cy: 66.8ns
     cdef:
         uint32_t hval = 0x811c9dc5
-        uint8_t b
-    for b in data:
-        hval ^= b
+        Py_ssize_t i, length = len(data)
+        const uint8_t* buf = <const uint8_t*>data
+    for i in range(length):
+        hval ^= buf[i]
         hval *= 0x01000193
     return hval
 
@@ -67,7 +69,10 @@ cpdef unber(bytes buf):
         uint64_t acc = 0
         uint8_t b
 
-    for b in buf:
+    cdef Py_ssize_t i, length = len(buf)
+    cdef const uint8_t* data = <const uint8_t*>buf
+    for i in range(length):
+        b = data[i]
         acc = (acc << 7) + (b & 0x7f)
         if not b & 0x80:
             res.append(acc)
@@ -103,6 +108,8 @@ cpdef (int, int) lzf_length(bytes raw_data):
         uint32_t csize=len(raw_data), start=1, usize
         # first byte, mask, buffer iterator placeholder
         uint8_t lower=raw_data[0], mask=0x80, b
+        const uint8_t* data = <const uint8_t*>raw_data
+        Py_ssize_t i
 
     while mask and csize > start and (lower & mask):
         mask >>= 1 + (mask == 0x80)
@@ -110,7 +117,8 @@ cpdef (int, int) lzf_length(bytes raw_data):
     if not mask or csize < start:
         raise ValueError('LZF compressed data header is corrupted')
     usize = lower & (mask - 1)
-    for b in raw_data[1:start]:
+    for i in range(1, start):
+        b = data[i]
         usize = (usize << 6) + (b & 0x3f)
     if not usize:
         raise ValueError('LZF compressed data header is corrupted')
@@ -180,22 +188,35 @@ def decode_str(bytes raw_data, str encoding='utf-8'):
 
 # Pool of open TokyoCabinet databases to save few milliseconds on opening
 cdef dict _TCH_POOL = {}  # type: Dict[str, TCHashDB]
+cdef long _TCH_OWNER_PID = -1
 TCH_LOCK = Lock()
+
+
+def _reset_tch_state():
+    """Reset TokyoCabinet connection pool and lock state (safe after fork)."""
+    global TCH_LOCK, _TCH_OWNER_PID
+    TCH_LOCK = Lock()
+    _TCH_POOL.clear()
+    _TCH_OWNER_PID = os.getpid()
+
+
+def _after_fork(_obj=None):
+    _reset_tch_state()
+
+# TCHashDB cursor is not fork-safe, so we need to reset the state after fork
+_reset_tch_state()
+os.register_at_fork(after_in_child=_after_fork)
 
 cpdef TCHashDB get_tch(str path):
     """ Cache TCHashDB objects """
+    if os.getpid() != _TCH_OWNER_PID: 
+        _reset_tch_state()
     if path in _TCH_POOL:
         return _TCH_POOL[path]
-    try:
-        TCH_LOCK.acquire()
-        # in multithreading environment this can cause race condition,
-        # so we need a lock
+    with TCH_LOCK:
         if path not in _TCH_POOL:
-            # open database in read-only mode and allow concurrent access
             _TCH_POOL[path] = TCHashDB(path, ro=True)
-    finally:
-        TCH_LOCK.release()
-    return _TCH_POOL[path]
+        return _TCH_POOL[path]
 
 cpdef uint8_t get_shard(bytes key, uint8_t sharding_bits, bint use_fnv_keys):
     """ Get shard id """

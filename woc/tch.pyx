@@ -1,4 +1,4 @@
-# cython: language_level=3str, wraparound=False, boundscheck=False, nonecheck=False, profile=True, linetrace=True
+# cython: language_level=3str, wraparound=False, boundscheck=False, nonecheck=False, profile=False, linetrace=False
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 # @authors: Runzhi He <rzhe@pku.edu.cn>
@@ -37,6 +37,7 @@ cdef extern from 'tchdb.h':
     bint tchdboptimize(TCHDB *hdb, int64_t bnum, int8_t apow, int8_t fpow, uint8_t opts); # Optimize the database to reduce space
 
 cdef class TCHashDB:
+    cdef TCHDB * _db
     """Object representing a Tokyocabinet Hash table"""
 
     def __cinit__(self, str path, bint ro=False):
@@ -121,9 +122,15 @@ cdef class TCHashDB:
             raise IOError(f'Failed to drop all records in {self.filename}: ' + self._error())
 
     cpdef void close(self) except *:
-        cdef bint result = tchdbclose(self._db)
+        cdef TCHDB *db = self._db
+        if db is NULL:
+            return
+        self._db = NULL
+        cdef bint result = tchdbclose(db)
         if not result:
+            self._db = db
             raise IOError(f'Failed to close {self.filename}: ' + self._error())
+        tchdbdel(db)
 
     cpdef void optimize(self) except *:
         cdef bint result = tchdboptimize(self._db, -1, -1, -1, -1)
@@ -140,10 +147,19 @@ cdef class TCHashDB:
         self.delete(key)
 
     def __len__(self):
+        if self._db is NULL:
+            return 0
         return tchdbrnum(self._db)
 
     def __del__(self):
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def __dealloc__(self):
-        free(self._db)  # it should never be null
+        cdef TCHDB *db = self._db
+        if db is not NULL:
+            tchdbclose(db)
+            tchdbdel(db)
+            self._db = NULL
