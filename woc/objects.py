@@ -837,7 +837,7 @@ class RootProject(Project):
 
     @cached_property
     def commits(self) -> "List[Commit]":
-        return [Commit(c) for c in self._get_list_values(f"{self._ident}2C")]
+        return [Commit(c) for c in self._get_list_values(f"{self._ident}2c")]
 
     @cached_property
     def projects(self) -> "List[Project]":
