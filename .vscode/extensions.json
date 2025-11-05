@@ -1,0 +1,11 @@
+{
+    "recommendations": [
+        "ms-python.python", // Python language support
+        "detachhead.basedpyright", // Static type checking (for mypy)
+        "charliermarsh.ruff", // Linting (matches your ruff dev dependency)
+        "matangover.mypy", // mypy support
+        "tamasfe.even-better-toml", // toml support
+        "github.vscode-github-actions", // github actions
+        "ktnrg45.vscode-cython", // Cython support
+    ]
+}
