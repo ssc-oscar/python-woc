@@ -174,10 +174,8 @@ def decode_str(bytes raw_data, str encoding='utf-8'):
     try:
         return raw_data.decode(encoding)
     except UnicodeDecodeError:
-        import chardet  # should be rarely used
-        _encoding = chardet.detect(raw_data)['encoding']
-        if not _encoding:
-            _encoding = 'latin1'
+        import chardet
+        _encoding = chardet.detect(raw_data)['encoding'] or 'latin-1'
         _ret = raw_data.decode(_encoding, errors='replace')
         if len(_ret) == 0:
             logging.error(f"Failed to decode: {raw_data[:20]}... with encoding {_encoding}")
@@ -188,7 +186,7 @@ def decode_str(bytes raw_data, str encoding='utf-8'):
 
 # Pool of open TokyoCabinet databases to save few milliseconds on opening
 cdef dict _TCH_POOL = {}  # type: Dict[str, TCHashDB]
-cdef long _TCH_OWNER_PID = -1
+cdef int _TCH_OWNER_PID = -1
 TCH_LOCK = Lock()
 
 
@@ -257,19 +255,31 @@ def decode_value(
             return (Time, Author, cmt_sha.hex())
         elif out_dtype == 'cs3':  # type: list[tuple[str, str, str]]
             data = decomp_or_raw(value)
-            _splited = decode_str(data).split(";")
+            try:
+                _splited = data.decode('utf-8').split(';')
+            except UnicodeDecodeError:
+                _splited = [decode_str(v) for v in data.split(b';')]
             return [
                 (_splited[i],_splited[i+1],_splited[i+2])
                 for i in range(0, len(_splited) - 2, 3)  # may not alway aligned reading large objects
             ]
         elif out_dtype == 'cs':   # type: list[str]
             data = decomp_or_raw(value)
-            return [decode_str(v)
-                for v in data.split(b';')
-                if v and v != b'EMPTY']
+            try:
+                return [v for v in data.decode('utf-8').split(';') 
+                        if v and v != 'EMPTY']
+            except UnicodeDecodeError:
+                return [decode_str(v)
+                    for v in data.split(b';')
+                    if v and v != b'EMPTY']
         elif out_dtype == 's':  # type: list[str]
-            return [decode_str(v)
-                for v in value.split(b';')]
+            try:
+                return [v for v in value.decode('utf-8').split(';') 
+                        if v and v != 'EMPTY']
+            except UnicodeDecodeError:
+                return [decode_str(v)
+                    for v in value.split(b';')
+                    if v and v != b'EMPTY']
         elif out_dtype == 'r':  # type: list[str, int]
             _hex = value[:20].hex()
             _len = unber(value[20:])[0]

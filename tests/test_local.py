@@ -4,7 +4,7 @@ import os
 import pytest
 
 # Import the TCHashDB class
-from woc.local import WocMapsLocal
+from woc.local import WocMapsLocal, decode_str
 
 
 @pytest.fixture
@@ -193,6 +193,7 @@ def test_bad_keys():
     with pytest.raises(KeyError):
         woc_err.get_values("c", "3f631f976149d8702d0b1496df7b98f16a9357ed")
 
+
 _FORK_WOC = None
 
 
@@ -228,3 +229,38 @@ def test_get_values_after_fork():
     assert value == "W4D3_news"
 
     _FORK_WOC = None
+
+
+def test_decode_str():
+    assert decode_str("新建文件夹".encode("utf-8")) == "新建文件夹"
+    assert (
+        decode_str("复件 (1) - 代码文件.rar".encode("gb2312"))
+        == "复件 (1) - 代码文件.rar"
+    )
+    assert (
+        decode_str("深层路径/源码/测试/最终版_v2.c".encode("gb18030"))
+        == "深层路径/源码/测试/最终版_v2.c"
+    )
+    assert decode_str("新しいフォルダー".encode("shift_jis")) == "新しいフォルダー"
+    assert (
+        decode_str("デスクトップ/ソースコード.txt".encode("shift_jis"))
+        == "デスクトップ/ソースコード.txt"
+    )
+    assert decode_str("新增資料夾".encode("big5")) == "新增資料夾"
+    assert decode_str("專案備份/未命名.bmp".encode("big5")) == "專案備份/未命名.bmp"
+    assert decode_str("공지사항.hwp".encode("cp949")) == "공지사항.hwp"
+    assert decode_str("Новая папка".encode("cp1251")) == "Новая папка"
+    assert (
+        decode_str("C:/Program Files/Разное/readme.txt".encode("cp1251"))
+        == "C:/Program Files/Разное/readme.txt"
+    )
+    assert (
+        decode_str("Nouveau dossier/Crédit Agricole.pdf".encode("cp1252"))
+        == "Nouveau dossier/Crédit Agricole.pdf"
+    )
+    assert decode_str("München_Straße.jpg".encode("cp1252")) == "München_Straße.jpg"
+    assert decode_str("Price_€500.txt".encode("cp1252")) == "Price_€500.txt"
+    assert (
+        decode_str(b"css/\xd0\xc2\xbd\xa8\xce\xc4\xbc\xfe\xbc\xd0/images")
+        == "css/新建文件夹/images"
+    )
